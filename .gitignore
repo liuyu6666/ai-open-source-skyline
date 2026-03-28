@@ -1,0 +1,13 @@
+.next
+node_modules
+coverage
+dist
+out
+output
+.playwright-cli
+.vercel
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
