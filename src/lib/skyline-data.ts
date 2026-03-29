@@ -1,3 +1,5 @@
+import { loadMaterializedSkylineSnapshot } from "@/lib/skyline-db";
+
 export type Locale = "zh" | "en";
 
 export type DomainKey =
@@ -1143,6 +1145,12 @@ const getLiveSkylineSnapshot = async () => {
 };
 
 export async function getSkylineSnapshot(): Promise<SkylineSnapshot> {
+  const materializedSnapshot = await loadMaterializedSkylineSnapshot();
+
+  if (materializedSnapshot) {
+    return materializedSnapshot;
+  }
+
   const liveSnapshot = await getLiveSkylineSnapshot();
 
   return liveSnapshot ?? getDemoSkylineSnapshot();

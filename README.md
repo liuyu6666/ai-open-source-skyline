@@ -1,97 +1,77 @@
 # GitHub Skyline MVP
 
-一个面向 `AI / agent / devtools` 生态的 GitHub 发现型 MVP。
+一个把 GitHub 公共仓库宇宙压成 3D 天际线的发现型 MVP。
 
-当前版本重点验证 4 件事：
+当前版本重点验证两件事：
 
-- 仓库能否用极简 3D 立方体城市表达
-- 白天 / 夜晚的场景氛围能否提升可读性
-- 夜间楼体发光是否能直观表达更新频率
-- 右侧榜单是否能补上“每天新增”和“最近爆发”的决策信息
+- `1 repo = 1 tower` 的城市表达能否承载足够大的仓库池
+- `30 天物化快照` 能否稳定支撑“高星 / 高增速 / 高活跃”仓库的日更天际线
 
 ## 本地启动
 
 ```bash
 npm install
 cp .env.example .env.local
-# 填入 GITHUB_TOKEN 可切到真实 GitHub 快照；不填则自动回退到 demo
+# GITHUB_TOKEN 用于补全仓库元数据；不填仍可跑 demo / 已有快照
 npm run dev
 ```
 
 打开 [http://localhost:3000](http://localhost:3000)
 
-## 当前 MVP 的后端实现
+## 30 天数据管线
 
-现在的“后端”是 Next.js App Router 里的轻量 API：
+现在的真实数据主链路分成 4 步：
 
-- 页面服务端先调用 `getSkylineSnapshot()`
-- `/api/skyline` 返回同一份结构化快照
-- 数据源优先走 `GITHUB_TOKEN` 驱动的 GitHub 官方 API 快照
-- 没有 token 或 API 失败时，自动回退到 `src/lib/skyline-data.ts` 里的 demo 数据
+1. `npm run db:schema`
+- 初始化本地 SQLite 数据库 `data/skyline.sqlite`
 
-这样做的目的是先把前后端协议、场景编码和 UI 决策固定下来，后面可以直接替换真实抓取任务，而不用重写前端。
+2. `npm run db:backfill:30d`
+- 流式回放 GH Archive 最近 30 天小时文件
+- 聚合 `Watch / Push / PR / Issues / Release / Create / Fork` 到日级表
+- 记录 repo-day 贡献者集合
 
-## 真实数据是不是一定要写爬虫
+3. `npm run db:enrich`
+- 用 GitHub REST `/repos/{owner}/{repo}` 补仓库元数据
+- 拉 stars 总量、语言、topics、pushed_at、归档状态等
 
-第一版不需要。
+4. `npm run db:snapshot`
+- 按 30 天窗口筛出达到阈值的仓库
+- 计算混合分数和楼体参数
+- 物化到 `data/skyline-snapshot.json`
+- 页面优先读取这份快照，没有才回退到旧的轻量 live/demo 逻辑
 
-- 当前实现优先用 GitHub 官方 API
-- 基础盘用一组 watchlist 仓库获取真实 stars / push 时间 / repo events
-- 增量发现用 GitHub Search 拉近 21 天的新项目
-- 右侧 7 日 star 脉冲和夜间楼灯，当前来自 repo public events 的真实事件采样
+一条命令串起来：
 
-这意味着第一版更像“官方 API 驱动的数据采集”，不是传统网页爬虫。
-
-真正需要 crawler 的情况通常是：
-
-- 你要抓 GitHub API 没给的页面级信息
-- 你要补 README / 官网 / 文档站的额外语义特征
-- 你要覆盖更大的生态来源，而不只是 GitHub
-
-## 建议的真实数据方案
-
-生产版建议拆成 4 层：
-
-1. 发现层
-- 用 GitHub Search + topics + 自定义种子仓库发现相关 repo
-- 用 GH Archive 的 `CreateEvent` 追踪新增仓库
-- 用 `PushEvent` / `PullRequestEvent` / `IssuesEvent` 做活跃度增量
-
-2. 补全层
-- GitHub REST 拉 repo 元信息、topics、默认分支、stars 总量
-- GitHub REST starring endpoint 或 GH Archive `WatchEvent` 聚合每日 star 增量
-- README / description 抽文本特征，后续做社区布局
-
-3. 计算层
-- 每天生成 `repo_daily_rollups`
-- 计算混合分数
-  - `score = log(totalStars) + starDelta7d + updateEvents7d + contributors30d`
-- 计算楼高、楼灯强度、是否属于 newborn / momentum
-
-4. 快照层
-- 每天或每小时生成一个 `skyline_snapshot`
-- 前端只读取最新快照
-- 社区布局离线计算，避免页面实时跑聚类
-
-## 推荐的数据表
-
-```text
-repositories
-repo_daily_rollups
-repo_topics
-repo_similarity_edges
-skyline_snapshots
+```bash
+npm run db:bootstrap:30d
 ```
 
-## 为什么先做快照而不是实时
+## 为什么不是纯网页爬虫
 
-- GitHub events 官方并不适合强实时
-- GH Archive 有天然延迟，但非常适合日级和小时级分析
-- 3D 页面更适合读取预计算结果，避免客户端负担过重
+第一版不以 GitHub 网页 HTML 爬虫为主。
 
-## 接下来适合补的能力
+- `GH Archive` 负责全站公共事件发现与日级增量
+- `GitHub API` 负责 repo 元数据补全
+- 只有未来要补 README 外部站点语义时，才需要少量 crawler
 
-- 从 demo 数据切换到 SQLite / Postgres
-- 增加“今日新增仓库”自动抓取
-- 增加 README 语义聚类，取代当前手工社区坐标
-- 保留现在的楼房版本，同时新增 3D 地形图模式
+这条链路更稳，也更适合“每天至少更新一次”的目标。
+
+## 当前入场阈值
+
+30 天快照默认会把满足以下任一条件的仓库纳入候选：
+
+- `total_stars >= 200`
+- `stars_added_30d >= 20`
+- `update_events_30d >= 80 && total_stars >= 50`
+- `created_in_30d && total_stars >= 30`
+
+然后再按混合分数取前 `420` 个仓库进入城市。
+
+## 数据落地
+
+生成物默认都在 `data/` 下：
+
+- `data/skyline.sqlite`
+- `data/skyline-snapshot.json`
+
+这些都是运行产物，不进 git。
