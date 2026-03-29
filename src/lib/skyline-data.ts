@@ -113,6 +113,18 @@ const extraLiveRepoCount = 72;
 
 const districts = skylineLayoutConfig.districts as DistrictRecord[];
 const skylineGrid = skylineLayoutConfig.grid;
+const skylineTower = skylineLayoutConfig.tower;
+
+const computeTowerHeight = (totalStars: number, maxStars: number) => {
+  if (maxStars <= 0) {
+    return skylineTower.minHeight;
+  }
+
+  return Math.max(
+    skylineTower.minHeight,
+    (Math.max(totalStars, 0) / maxStars) * skylineTower.maxHeight,
+  );
+};
 
 const rawRepos: RawRepo[] = [
   {
@@ -754,6 +766,7 @@ const buildSkylineSnapshot = (
   }
 
   const maxUpdates = Math.max(1, ...sourceRepos.map((repo) => repo.updateEvents7d));
+  const maxStars = Math.max(1, ...sourceRepos.map((repo) => repo.totalStars));
 
   const repos = scoredRepos.map(({ repo, score }) => {
     const district = districtIndex.get(repo.domain);
@@ -765,7 +778,7 @@ const buildSkylineSnapshot = (
 
     const width = clamp(8.8 + Math.log10(repo.totalStars + 10) * 2.1, 9.6, 18.8);
     const depth = clamp(8.4 + Math.sqrt(repo.updateEvents7d + 1) * 0.72, 9.2, 17.6);
-    const height = clamp(18 + score * 0.8, 24, 92);
+    const height = computeTowerHeight(repo.totalStars, maxStars);
 
     return {
       ...repo,

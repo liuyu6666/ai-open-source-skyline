@@ -13,6 +13,7 @@ const schemaPath = path.join(projectRoot, "db", "schema.sql");
 export const skylineDistricts = skylineLayoutConfig.districts;
 export const skylineGrid = skylineLayoutConfig.grid;
 export const skylineScene = skylineLayoutConfig.scene;
+export const skylineTower = skylineLayoutConfig.tower;
 
 const envFiles = [".env.local", ".env"];
 
@@ -116,6 +117,17 @@ export function openSkylineDatabase() {
 export function ensureSchema(database) {
   const schemaSql = fs.readFileSync(schemaPath, "utf8");
   database.exec(schemaSql);
+}
+
+export function computeTowerHeight(totalStars, maxStars) {
+  if (maxStars <= 0) {
+    return skylineTower.minHeight;
+  }
+
+  return Math.max(
+    skylineTower.minHeight,
+    (Math.max(totalStars, 0) / maxStars) * skylineTower.maxHeight,
+  );
 }
 
 export function withTransaction(database, fn) {

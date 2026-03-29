@@ -98,7 +98,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       },
     },
     sceneLegend: {
-      height: "楼高 = 混合分数",
+      height: "楼高 = 总 star 线性比例",
       lights: "夜灯 = 更新频率",
       interaction: "点击楼体查看详情",
     },
@@ -172,7 +172,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       },
     },
     sceneLegend: {
-      height: "Height = mixed score",
+      height: "Height = total stars, linearly scaled",
       lights: "Night glow = update frequency",
       interaction: "Click a tower for repo details",
     },
