@@ -309,6 +309,17 @@ function refreshContributorCounts(database, metricDates) {
   });
 }
 
+function clearActorRows(database, metricDate) {
+  database
+    .prepare(
+      `
+        DELETE FROM skyline_repo_daily_actors
+        WHERE metric_date = ?
+      `,
+    )
+    .run(metricDate);
+}
+
 async function processHour(database, metricDate, hour) {
   const bucket = createHourlyBucket(metricDate);
 
@@ -350,6 +361,13 @@ export async function backfillGhArchive({
 
   try {
     for (const metricDate of metricDates) {
+      const daySummary = {
+        actorRows: 0,
+        eventRows: 0,
+        metricRows: 0,
+        repoRows: 0,
+      };
+
       for (let hour = 0; hour < 24; hour += 1) {
         if (hourLimit !== null && hour >= hourLimit) {
           break;
@@ -362,10 +380,16 @@ export async function backfillGhArchive({
         summary.eventRows += totals.eventRows;
         summary.metricRows += totals.metricRows;
         summary.repoRows += totals.repoRows;
+        daySummary.actorRows += totals.actorRows;
+        daySummary.eventRows += totals.eventRows;
+        daySummary.metricRows += totals.metricRows;
+        daySummary.repoRows += totals.repoRows;
       }
-    }
 
-    refreshContributorCounts(database, metricDates);
+      refreshContributorCounts(database, [metricDate]);
+      clearActorRows(database, metricDate);
+      console.log(`Completed ${metricDate}`, daySummary);
+    }
     setIngestionState(database, "gharchive_backfill", {
       completedAt: new Date().toISOString(),
       days,
