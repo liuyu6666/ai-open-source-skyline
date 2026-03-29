@@ -54,12 +54,12 @@ type SiteCopy = {
 const siteCopy: Record<SupportedLocale, SiteCopy> = {
   zh: {
     timeLocale: "zh-CN",
-    brand: "GitHub 天际线雷达",
-    title: "把 AI 开源项目做成一座可观察的 3D 城市。",
+    brand: "GitHub 天际线图谱",
+    title: "把快速变化的 GitHub 仓库做成一座可观察的 3D 城市。",
     demoSubtitle:
-      "当前楼体形态和数据仍是示例快照，用来先验证视觉表达和信息结构；下一步会切到真实 GitHub 增量抓取。",
+      "当前仍在回退示例快照，用来保证界面和交互可用；一旦 30 天物化快照生成成功，页面会自动切到真实仓库城市。",
     liveSubtitle:
-      "当前优先接 GitHub 官方 API 的实时快照，不走传统爬虫；新增、热度和更新频率会逐步从真实仓库事件填充。",
+      "当前优先读取 30 天 GH Archive + GitHub API 物化快照；没有快照时才回退到轻量 API 采样。",
     refresh: "刷新快照",
     refreshing: "刷新中…",
     switchLabel: "切换到英文版",
@@ -74,19 +74,19 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     stats: {
       tracked: {
         label: "跟踪仓库",
-        note: "当前快照中纳入城市的相关项目数量",
+        note: "当前快照中进入城市的仓库数量",
       },
       newborn: {
         label: "24 小时新增",
-        note: "最近一天新出现或刚进入视野的项目",
+        note: "最近一天新出现或刚达到入场阈值的仓库",
       },
       stars: {
         label: "7 日 star 增量",
-        note: "用来判断整体热度斜率",
+        note: "用来判断近 7 天热度变化",
       },
       updates: {
         label: "7 日更新事件",
-        note: "夜间楼灯亮度的核心来源",
+        note: "夜间楼灯亮度的主要来源",
       },
       momentum: {
         label: "增长最快",
@@ -94,7 +94,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       },
       newestRepo: {
         label: "最新出现",
-        note: "当前示例里最年轻的仓库",
+        note: "当前快照里最年轻的仓库",
       },
     },
     sceneLegend: {
@@ -106,7 +106,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       repoDetail: "仓库详情",
       close: "关闭",
       demo: "示例快照",
-      live: "实时快照",
+      live: "30 天快照",
       emptyTitle: "点击任意楼体",
       emptyBody: "右侧会展示对应仓库的描述、增量、活跃度和最近趋势。",
       totalStars: "总 star",
@@ -119,21 +119,21 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       mixedScore: "混合分数",
     },
     domainLabels: {
-      agents: "代理系统",
+      agents: "应用与产品",
       tooling: "开发工具",
-      automation: "浏览器自动化",
-      inference: "推理引擎",
-      memory: "记忆与数据",
+      automation: "自动化流程",
+      inference: "基础设施",
+      memory: "数据与存储",
     },
   },
   en: {
     timeLocale: "en-US",
-    brand: "GitHub Skyline Radar",
-    title: "Turn AI open-source projects into a readable 3D city.",
+    brand: "GitHub Skyline Atlas",
+    title: "Turn fast-moving GitHub repos into a readable 3D city.",
     demoSubtitle:
-      "The towers and numbers are still demo snapshots for validating the visual language and information architecture; the next step is wiring in real GitHub incremental ingestion.",
+      "The app is still falling back to demo snapshots when no catalog exists; once the 30-day materialized snapshot is ready, the city switches to real repositories automatically.",
     liveSubtitle:
-      "The app now prefers live snapshots from the official GitHub API instead of a traditional crawler; newborn repos, heat, and update cadence will increasingly come from real repository events.",
+      "The app now prefers a 30-day materialized snapshot built from GH Archive plus GitHub API enrichment; the lightweight live sampler is only a fallback.",
     refresh: "Refresh snapshot",
     refreshing: "Refreshing…",
     switchLabel: "Switch to Chinese",
@@ -148,11 +148,11 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     stats: {
       tracked: {
         label: "Tracked repos",
-        note: "Projects currently represented in the skyline",
+        note: "Repositories currently represented in the skyline",
       },
       newborn: {
         label: "New in 24h",
-        note: "Projects that just appeared or entered the watch window",
+        note: "Repos that just appeared or crossed the entry threshold",
       },
       stars: {
         label: "Stars in 7d",
@@ -168,7 +168,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       },
       newestRepo: {
         label: "Newest repo",
-        note: "Youngest project in the current demo pool",
+        note: "Youngest repository in the current snapshot",
       },
     },
     sceneLegend: {
@@ -180,7 +180,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       repoDetail: "Repo detail",
       close: "Close",
       demo: "Demo snapshot",
-      live: "Live snapshot",
+      live: "30-day snapshot",
       emptyTitle: "Click any tower",
       emptyBody: "The right side will show its description, growth, maintenance signal, and recent pulse.",
       totalStars: "Total stars",
@@ -193,11 +193,11 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       mixedScore: "Mixed score",
     },
     domainLabels: {
-      agents: "Agent systems",
+      agents: "Apps + products",
       tooling: "Dev tooling",
-      automation: "Browser ops",
-      inference: "Inference",
-      memory: "Memory + data",
+      automation: "Automation",
+      inference: "Infrastructure",
+      memory: "Data + storage",
     },
   },
 };

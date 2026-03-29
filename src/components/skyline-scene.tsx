@@ -42,14 +42,6 @@ type FillerTower = {
   lightStrength: number;
 };
 
-type CompoundTower = {
-  x: number;
-  z: number;
-  width: number;
-  depth: number;
-  height: number;
-};
-
 const hashValue = (seed: number) => {
   const value = Math.sin(seed) * 43758.5453123;
 
@@ -194,30 +186,6 @@ function RoadStrip({
   );
 }
 
-function getCompoundBounds(repo: RepoRecord, annexTowers: CompoundTower[]) {
-  let minX = -repo.width / 2;
-  let maxX = repo.width / 2;
-  let minZ = -repo.depth / 2;
-  let maxZ = repo.depth / 2;
-  let maxHeight = repo.height;
-
-  for (const tower of annexTowers) {
-    minX = Math.min(minX, tower.x - tower.width / 2);
-    maxX = Math.max(maxX, tower.x + tower.width / 2);
-    minZ = Math.min(minZ, tower.z - tower.depth / 2);
-    maxZ = Math.max(maxZ, tower.z + tower.depth / 2);
-    maxHeight = Math.max(maxHeight, tower.height);
-  }
-
-  return {
-    width: maxX - minX + 1.6,
-    depth: maxZ - minZ + 1.6,
-    height: maxHeight + 4,
-    centerX: (minX + maxX) / 2,
-    centerZ: (minZ + maxZ) / 2,
-  };
-}
-
 function Building({
   repo,
   palette,
@@ -234,80 +202,6 @@ function Building({
   const crownRef = useRef<THREE.Mesh>(null);
   const roofHaloRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
-  const annexTowers = useMemo(() => {
-    const towers: CompoundTower[] = [];
-
-    towers.push({
-      x: -repo.width * 0.42,
-      z: repo.depth * 0.08,
-      width: repo.width * 0.4,
-      depth: repo.depth * 0.56,
-      height: repo.height * 0.52,
-    });
-    towers.push({
-      x: repo.width * 0.38,
-      z: repo.depth * 0.14,
-      width: repo.width * 0.34,
-      depth: repo.depth * 0.5,
-      height: repo.height * 0.46,
-    });
-
-    if (repo.score > 20 || repo.updateEvents7d > 18) {
-      towers.push({
-        x: -repo.width * 0.08,
-        z: -repo.depth * 0.46,
-        width: repo.width * 0.3,
-        depth: repo.depth * 0.34,
-        height: repo.height * 0.32,
-      });
-    }
-
-    if (repo.score > 26 || repo.updateEvents7d > 24) {
-      towers.push({
-        x: repo.width * 0.46,
-        z: -repo.depth * 0.12,
-        width: repo.width * 0.44,
-        depth: repo.depth * 0.52,
-        height: repo.height * 0.58,
-      });
-    }
-
-    if (repo.score > 30 || repo.starDelta7d > 90) {
-      towers.push({
-        x: repo.width * 0.08,
-        z: repo.depth * 0.44,
-        width: repo.width * 0.34,
-        depth: repo.depth * 0.4,
-        height: repo.height * 0.38,
-      });
-    }
-
-    if (repo.score > 36 || repo.starDelta7d > 180 || repo.updateEvents7d > 38) {
-      towers.push({
-        x: -repo.width * 0.54,
-        z: -repo.depth * 0.34,
-        width: repo.width * 0.28,
-        depth: repo.depth * 0.34,
-        height: repo.height * 0.28,
-      });
-    }
-
-    if (repo.score > 42 || repo.starDelta7d > 320) {
-      towers.push({
-        x: repo.width * 0.6,
-        z: repo.depth * 0.44,
-        width: repo.width * 0.24,
-        depth: repo.depth * 0.3,
-        height: repo.height * 0.22,
-      });
-    }
-
-    return towers;
-  }, [repo.depth, repo.height, repo.score, repo.starDelta7d, repo.updateEvents7d, repo.width]);
-  const compoundBounds = useMemo(
-    () => getCompoundBounds(repo, annexTowers),
-    [annexTowers, repo],
-  );
 
   useEffect(() => {
     document.body.style.cursor = hovered ? "pointer" : "default";
@@ -323,7 +217,7 @@ function Building({
     if (shellRef.current) {
       shellRef.current.position.y = THREE.MathUtils.lerp(
         shellRef.current.position.y,
-        repo.height * 0.34 + 0.22 + (hovered ? 0.18 : 0),
+        repo.height / 2 + 0.28 + (hovered ? 0.18 : 0),
         0.08,
       );
     }
@@ -399,24 +293,6 @@ function Building({
           event.stopPropagation();
           onSelect(repo.id);
         }}
-        onPointerEnter={() => setHovered(true)}
-        onPointerLeave={() => setHovered(false)}
-        position={[
-          compoundBounds.centerX,
-          compoundBounds.height / 2 + 0.25,
-          compoundBounds.centerZ,
-        ]}
-        renderOrder={0}
-      >
-        <boxGeometry args={[compoundBounds.width, compoundBounds.height, compoundBounds.depth]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-      </mesh>
-
-      <mesh
-        onClick={(event) => {
-          event.stopPropagation();
-          onSelect(repo.id);
-        }}
         position={[0, 0.22, 0]}
       >
         <boxGeometry args={[repo.lotWidth * 1.04, 0.3, repo.lotDepth * 1.04]} />
@@ -439,7 +315,7 @@ function Building({
         onPointerLeave={() => setHovered(false)}
         renderOrder={1}
       >
-        <boxGeometry args={[repo.width, repo.height * 0.68, repo.depth]} />
+        <boxGeometry args={[repo.width, repo.height, repo.depth]} />
         <meshStandardMaterial
           color={repo.color}
           emissive={repo.color}
@@ -452,84 +328,17 @@ function Building({
         {(selected || hovered) && <Edges color="#ffffff" scale={1.01} />}
       </mesh>
 
-      {annexTowers.map((tower, index) => (
-        <group key={`${repo.id}-annex-${index}`} position={[tower.x, 0, tower.z]}>
-          <mesh
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelect(repo.id);
-            }}
-            onPointerEnter={() => setHovered(true)}
-            onPointerLeave={() => setHovered(false)}
-            position={[0, tower.height / 2 + 0.22, 0]}
-            renderOrder={1}
-          >
-            <boxGeometry args={[tower.width, tower.height, tower.depth]} />
-            <meshStandardMaterial
-              color={repo.color}
-              emissive={repo.color}
-              emissiveIntensity={palette.isNight ? 0.04 : 0.018}
-              metalness={0.1}
-              roughness={0.24}
-              transparent
-              opacity={palette.isNight ? 0.44 : 0.3}
-            />
-            {(selected || hovered) && <Edges color="#ffffff" scale={1.01} />}
-          </mesh>
-
-          <mesh
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelect(repo.id);
-            }}
-            position={[0, tower.height / 2 + 0.22, 0]}
-            renderOrder={3}
-          >
-            <boxGeometry
-              args={[tower.width * 0.66, Math.max(tower.height - 2.2, 2), tower.depth * 0.66]}
-            />
-            <meshStandardMaterial
-              color={repo.color}
-              emissive={repo.color}
-              emissiveIntensity={palette.isNight ? 0.16 + repo.lightStrength * 0.84 : 0.05}
-              transparent
-              depthWrite={false}
-              opacity={palette.isNight ? 0.52 : 0.18}
-            />
-          </mesh>
-
-          <mesh
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelect(repo.id);
-            }}
-            position={[0, tower.height + 0.58, 0]}
-            renderOrder={4}
-          >
-            <boxGeometry
-              args={[tower.width * 0.8, Math.max(tower.height * 0.04, 0.9), tower.depth * 0.8]}
-            />
-            <meshStandardMaterial
-              color={repo.color}
-              emissive={repo.color}
-              emissiveIntensity={palette.isNight ? 0.24 : 0.1 + repo.lightStrength * 0.36}
-              transparent
-              depthWrite={false}
-              opacity={palette.isNight ? 0.72 : 0.42}
-            />
-          </mesh>
-        </group>
-      ))}
-
       <mesh
         onClick={(event) => {
           event.stopPropagation();
           onSelect(repo.id);
         }}
-        position={[0, repo.height * 0.81, 0]}
+        position={[0, repo.height * 0.78, 0]}
         renderOrder={2}
       >
-        <boxGeometry args={[repo.width * 0.76, Math.max(repo.height * 0.15, 3.8), repo.depth * 0.76]} />
+        <boxGeometry
+          args={[repo.width * 0.74, Math.max(repo.height * 0.14, 3.4), repo.depth * 0.74]}
+        />
         <meshStandardMaterial
           color={repo.color}
           emissive={repo.color}
@@ -547,11 +356,11 @@ function Building({
           event.stopPropagation();
           onSelect(repo.id);
         }}
-        position={[0, repo.height * 0.35 + 0.25, 0]}
+        position={[0, repo.height / 2 + 0.28, 0]}
         renderOrder={3}
       >
         <boxGeometry
-          args={[repo.width * 0.62, Math.max(repo.height * 0.58, 4), repo.depth * 0.62]}
+          args={[repo.width * 0.62, Math.max(repo.height - 2.6, 5.4), repo.depth * 0.62]}
         />
         <meshStandardMaterial
           color={repo.color}
@@ -569,11 +378,11 @@ function Building({
           event.stopPropagation();
           onSelect(repo.id);
         }}
-        position={[0, repo.height * 0.91, 0]}
+        position={[0, repo.height + 0.68, 0]}
         renderOrder={4}
       >
         <boxGeometry
-          args={[repo.width * 0.84, Math.max(repo.height * 0.03, 1.2), repo.depth * 0.84]}
+          args={[repo.width * 0.84, Math.max(repo.height * 0.034, 1.2), repo.depth * 0.84]}
         />
         <meshStandardMaterial
           color={repo.color}
@@ -839,11 +648,11 @@ function SceneContent({
 
       <OrbitControls
         enablePan={false}
-        maxDistance={7600}
+        maxDistance={12000}
         maxPolarAngle={Math.PI / 2.08}
-        minDistance={18}
+        minDistance={28}
         minPolarAngle={Math.PI / 5.8}
-        target={[0, 24, 16]}
+        target={[0, 28, 18]}
       />
     </>
   );
@@ -852,7 +661,7 @@ function SceneContent({
 export function SkylineScene(props: SkylineSceneProps) {
   return (
     <Canvas
-      camera={{ fov: 18, near: 1, position: [0, 88, 364], far: 9000 }}
+      camera={{ fov: 18, near: 1, position: [0, 120, 460], far: 12000 }}
       gl={{ antialias: true, alpha: true }}
     >
       <SceneContent {...props} />
