@@ -106,38 +106,38 @@ type SearchSeed = {
 const dayMs = 24 * 60 * 60 * 1000;
 const hourMs = 60 * 60 * 1000;
 const liveCacheTtlMs = 12 * 60 * 1000;
-const extraLiveRepoCount = 32;
+const extraLiveRepoCount = 72;
 
 const districts: DistrictRecord[] = [
   {
     id: "agents",
     color: "#7dd3fc",
     center: { x: -42, z: -24 },
-    size: { width: 92, depth: 72 },
+    size: { width: 112, depth: 86 },
   },
   {
     id: "tooling",
     color: "#f9a8d4",
     center: { x: 44, z: -16 },
-    size: { width: 88, depth: 70 },
+    size: { width: 108, depth: 84 },
   },
   {
     id: "automation",
     color: "#c4b5fd",
     center: { x: 4, z: 14 },
-    size: { width: 112, depth: 88 },
+    size: { width: 132, depth: 102 },
   },
   {
     id: "inference",
     color: "#fcd34d",
     center: { x: -34, z: 62 },
-    size: { width: 84, depth: 64 },
+    size: { width: 104, depth: 82 },
   },
   {
     id: "memory",
     color: "#86efac",
     center: { x: 40, z: 66 },
-    size: { width: 86, depth: 66 },
+    size: { width: 104, depth: 82 },
   },
 ];
 
@@ -623,12 +623,12 @@ const createLotOffsets = (district: DistrictRecord, count: number) => {
       (slot / slotCount) * Math.PI * 1.88 +
       (hashValue(seed) - 0.5) * 0.38;
     const radiusX = Math.min(
-      district.size.width * 0.42,
-      10 + ring * 8.2 + hashValue(seed + 5.1) * 3.8,
+      district.size.width * 0.46,
+      9 + ring * 7.2 + hashValue(seed + 5.1) * 3.6,
     );
     const radiusZ = Math.min(
-      district.size.depth * 0.42,
-      8 + ring * 7.4 + hashValue(seed + 9.7) * 3.2,
+      district.size.depth * 0.46,
+      8 + ring * 6.8 + hashValue(seed + 9.7) * 3,
     );
     const spreadX =
       Math.cos(angle) * radiusX +
@@ -706,9 +706,9 @@ const buildSkylineSnapshot = (
       throw new Error(`Missing skyline layout for ${repo.fullName}`);
     }
 
-    const width = clamp(7.2 + Math.log10(repo.totalStars + 10) * 1.8, 8.2, 18.6);
-    const depth = clamp(7 + Math.sqrt(repo.updateEvents7d + 1) * 0.62, 8.2, 17.2);
-    const height = clamp(18 + score * 0.8, 22, 78);
+    const width = clamp(6.3 + Math.log10(repo.totalStars + 10) * 1.45, 7.1, 14.4);
+    const depth = clamp(6.2 + Math.sqrt(repo.updateEvents7d + 1) * 0.48, 7.1, 13.8);
+    const height = clamp(17 + score * 0.76, 21, 74);
 
     return {
       ...repo,
@@ -716,8 +716,8 @@ const buildSkylineSnapshot = (
       score: Number(score.toFixed(1)),
       width: Number(width.toFixed(1)),
       depth: Number(depth.toFixed(1)),
-      lotWidth: Number((width + 5.6).toFixed(1)),
-      lotDepth: Number((depth + 5.6).toFixed(1)),
+      lotWidth: Number((width + 4.2).toFixed(1)),
+      lotDepth: Number((depth + 4.2).toFixed(1)),
       height: Number(height.toFixed(1)),
       lightStrength: Number((repo.updateEvents7d / maxUpdates).toFixed(2)),
       x: lot.x,
@@ -745,77 +745,145 @@ const getLiveToken = () =>
   process.env.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || null;
 
 const buildLiveSearchSeeds = (): SearchSeed[] => {
-  const recentDate = toIsoDate(new Date(Date.now() - 60 * dayMs));
+  const recentDate = toIsoDate(new Date(Date.now() - 120 * dayMs));
+  const activeDate = toIsoDate(new Date(Date.now() - 45 * dayMs));
 
   return [
     {
       domain: "agents",
-      perPage: 16,
+      perPage: 22,
       query: `agent ai in:name,description created:>=${recentDate} archived:false mirror:false stars:>3`,
       sort: "updated",
     },
     {
       domain: "agents",
-      perPage: 14,
+      perPage: 22,
+      query:
+        `("ai agent" OR "agent framework" OR "multi-agent" OR "agent sdk") in:name,description pushed:>=${activeDate} archived:false mirror:false stars:>6`,
+      sort: "updated",
+    },
+    {
+      domain: "agents",
+      perPage: 18,
       query:
         `("ai agent" OR "agent framework" OR "multi-agent") in:name,description stars:>20 archived:false mirror:false`,
       sort: "stars",
     },
     {
+      domain: "agents",
+      perPage: 18,
+      query: `topic:agent archived:false mirror:false stars:>8`,
+      sort: "updated",
+    },
+    {
       domain: "tooling",
-      perPage: 16,
+      perPage: 22,
       query:
         `("coding assistant" OR copilot OR "ai coding" OR "code agent") in:name,description created:>=${recentDate} archived:false mirror:false stars:>3`,
       sort: "updated",
     },
     {
       domain: "tooling",
-      perPage: 14,
+      perPage: 22,
+      query:
+        `("coding assistant" OR "ai coding" OR copilot OR "code agent") in:name,description pushed:>=${activeDate} archived:false mirror:false stars:>6`,
+      sort: "updated",
+    },
+    {
+      domain: "tooling",
+      perPage: 18,
       query:
         `("coding assistant" OR "ai coding" OR copilot OR "code agent") in:name,description stars:>20 archived:false mirror:false`,
       sort: "stars",
     },
     {
+      domain: "tooling",
+      perPage: 18,
+      query: `("model context protocol" OR mcp OR "ai editor") in:name,description archived:false mirror:false stars:>6`,
+      sort: "updated",
+    },
+    {
       domain: "automation",
-      perPage: 16,
+      perPage: 22,
       query:
         `("browser automation" OR "computer use" OR "browser agent" OR "web agent") in:name,description created:>=${recentDate} archived:false mirror:false stars:>3`,
       sort: "updated",
     },
     {
       domain: "automation",
-      perPage: 14,
+      perPage: 22,
+      query:
+        `("browser automation" OR "computer use" OR "browser agent" OR "web agent") in:name,description pushed:>=${activeDate} archived:false mirror:false stars:>6`,
+      sort: "updated",
+    },
+    {
+      domain: "automation",
+      perPage: 18,
       query:
         `("browser automation" OR "computer use" OR "browser agent" OR "web agent") in:name,description stars:>10 archived:false mirror:false`,
       sort: "stars",
     },
     {
+      domain: "automation",
+      perPage: 18,
+      query: `(playwright OR puppeteer OR selenium OR "computer use") in:name,description archived:false mirror:false stars:>8`,
+      sort: "updated",
+    },
+    {
       domain: "inference",
-      perPage: 16,
+      perPage: 22,
       query:
         `("inference engine" OR "llm serving" OR "inference server" OR "llm runtime") in:name,description created:>=${recentDate} archived:false mirror:false stars:>3`,
       sort: "updated",
     },
     {
       domain: "inference",
-      perPage: 14,
+      perPage: 22,
+      query:
+        `("llm serving" OR "inference server" OR "inference runtime" OR "inference engine") in:name,description pushed:>=${activeDate} archived:false mirror:false stars:>6`,
+      sort: "updated",
+    },
+    {
+      domain: "inference",
+      perPage: 18,
       query:
         `("llm serving" OR "inference server" OR "inference runtime" OR "inference engine") in:name,description stars:>20 archived:false mirror:false`,
       sort: "stars",
     },
     {
+      domain: "inference",
+      perPage: 18,
+      query:
+        `("model gateway" OR "llm gateway" OR "llm proxy" OR "model router") in:name,description archived:false mirror:false stars:>8`,
+      sort: "updated",
+    },
+    {
       domain: "memory",
-      perPage: 16,
+      perPage: 22,
       query:
         `("agent memory" OR rag OR "vector database" OR "knowledge base") in:name,description created:>=${recentDate} archived:false mirror:false stars:>3`,
       sort: "updated",
     },
     {
       domain: "memory",
-      perPage: 14,
+      perPage: 22,
+      query:
+        `("agent memory" OR rag OR "vector database" OR "knowledge base") in:name,description pushed:>=${activeDate} archived:false mirror:false stars:>6`,
+      sort: "updated",
+    },
+    {
+      domain: "memory",
+      perPage: 18,
       query:
         `("agent memory" OR rag OR "vector database" OR "knowledge base") in:name,description stars:>20 archived:false mirror:false`,
       sort: "stars",
+    },
+    {
+      domain: "memory",
+      perPage: 18,
+      query:
+        `("retrieval" OR "vector store" OR "graph rag" OR embeddings) in:name,description archived:false mirror:false stars:>8`,
+      sort: "updated",
     },
   ];
 };
@@ -1039,7 +1107,7 @@ const getLiveSkylineSnapshot = async () => {
         }
       }
 
-      for (const item of pickBalancedCandidates(searchCandidates, 7, extraLiveRepoCount)) {
+      for (const item of pickBalancedCandidates(searchCandidates, 14, extraLiveRepoCount)) {
         deduped.set(item.repo.full_name.toLowerCase(), item);
       }
 
