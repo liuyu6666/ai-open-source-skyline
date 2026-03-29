@@ -1,0 +1,53 @@
+{
+  "districts": [
+    {
+      "id": "agents",
+      "color": "#7dd3fc",
+      "center": { "x": -114, "z": -42 },
+      "size": { "width": 188, "depth": 138 }
+    },
+    {
+      "id": "tooling",
+      "color": "#f9a8d4",
+      "center": { "x": 112, "z": -36 },
+      "size": { "width": 184, "depth": 136 }
+    },
+    {
+      "id": "automation",
+      "color": "#c4b5fd",
+      "center": { "x": 0, "z": 32 },
+      "size": { "width": 236, "depth": 178 }
+    },
+    {
+      "id": "inference",
+      "color": "#fcd34d",
+      "center": { "x": -90, "z": 146 },
+      "size": { "width": 172, "depth": 132 }
+    },
+    {
+      "id": "memory",
+      "color": "#86efac",
+      "center": { "x": 98, "z": 150 },
+      "size": { "width": 176, "depth": 132 }
+    }
+  ],
+  "grid": {
+    "avenueEvery": 4,
+    "streetEvery": 5,
+    "pitchX": 28,
+    "pitchZ": 28,
+    "avenueGap": 13,
+    "streetGap": 11,
+    "marginX": 30,
+    "marginZ": 30
+  },
+  "scene": {
+    "districtPadding": 54,
+    "fillerGap": 32,
+    "avenueSpacing": 88,
+    "streetSpacing": 68,
+    "mainRoadWidth": 22,
+    "roadWidth": 14,
+    "groundPadding": 240
+  }
+}

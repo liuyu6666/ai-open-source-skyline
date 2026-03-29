@@ -3,44 +3,16 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import skylineLayoutConfig from "../../config/skyline-layout.json" with { type: "json" };
 
 const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
 const defaultDbPath = path.join(projectRoot, "data", "skyline.sqlite");
 const defaultSnapshotPath = path.join(projectRoot, "data", "skyline-snapshot.json");
 const schemaPath = path.join(projectRoot, "db", "schema.sql");
 
-export const skylineDistricts = [
-  {
-    id: "agents",
-    color: "#7dd3fc",
-    center: { x: -114, z: -42 },
-    size: { width: 188, depth: 138 },
-  },
-  {
-    id: "tooling",
-    color: "#f9a8d4",
-    center: { x: 112, z: -36 },
-    size: { width: 184, depth: 136 },
-  },
-  {
-    id: "automation",
-    color: "#c4b5fd",
-    center: { x: 0, z: 32 },
-    size: { width: 236, depth: 178 },
-  },
-  {
-    id: "inference",
-    color: "#fcd34d",
-    center: { x: -90, z: 146 },
-    size: { width: 172, depth: 132 },
-  },
-  {
-    id: "memory",
-    color: "#86efac",
-    center: { x: 98, z: 150 },
-    size: { width: 176, depth: 132 },
-  },
-];
+export const skylineDistricts = skylineLayoutConfig.districts;
+export const skylineGrid = skylineLayoutConfig.grid;
+export const skylineScene = skylineLayoutConfig.scene;
 
 const envFiles = [".env.local", ".env"];
 
@@ -328,14 +300,14 @@ export function createLotOffsets(district, count) {
     Math.round(Math.sqrt((count * district.size.width) / district.size.depth) * 0.94),
   );
   const rows = Math.max(3, Math.ceil(count / columns));
-  const avenueEvery = 4;
-  const streetEvery = 5;
-  const avenueGap = clamp(district.size.width * 0.045, 5.4, 8.2);
-  const streetGap = clamp(district.size.depth * 0.04, 4.8, 7.2);
+  const avenueEvery = skylineGrid.avenueEvery;
+  const streetEvery = skylineGrid.streetEvery;
+  const avenueGap = skylineGrid.avenueGap;
+  const streetGap = skylineGrid.streetGap;
   const avenueCount = Math.floor((columns - 1) / avenueEvery);
   const streetCount = Math.floor((rows - 1) / streetEvery);
-  const widthBudget = district.size.width * 0.82 - avenueCount * avenueGap;
-  const depthBudget = district.size.depth * 0.82 - streetCount * streetGap;
+  const widthBudget = district.size.width - skylineGrid.marginX * 2 - avenueCount * avenueGap;
+  const depthBudget = district.size.depth - skylineGrid.marginZ * 2 - streetCount * streetGap;
   const stepX = columns > 1 ? widthBudget / (columns - 1) : 0;
   const stepZ = rows > 1 ? depthBudget / (rows - 1) : 0;
   const xPositions = [];

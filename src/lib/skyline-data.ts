@@ -1,4 +1,5 @@
 import { loadMaterializedSkylineSnapshot } from "@/lib/skyline-db";
+import skylineLayoutConfig from "../../config/skyline-layout.json";
 
 export type Locale = "zh" | "en";
 
@@ -110,38 +111,8 @@ const hourMs = 60 * 60 * 1000;
 const liveCacheTtlMs = 12 * 60 * 1000;
 const extraLiveRepoCount = 72;
 
-const districts: DistrictRecord[] = [
-  {
-    id: "agents",
-    color: "#7dd3fc",
-    center: { x: -114, z: -42 },
-    size: { width: 188, depth: 138 },
-  },
-  {
-    id: "tooling",
-    color: "#f9a8d4",
-    center: { x: 112, z: -36 },
-    size: { width: 184, depth: 136 },
-  },
-  {
-    id: "automation",
-    color: "#c4b5fd",
-    center: { x: 0, z: 32 },
-    size: { width: 236, depth: 178 },
-  },
-  {
-    id: "inference",
-    color: "#fcd34d",
-    center: { x: -90, z: 146 },
-    size: { width: 172, depth: 132 },
-  },
-  {
-    id: "memory",
-    color: "#86efac",
-    center: { x: 98, z: 150 },
-    size: { width: 176, depth: 132 },
-  },
-];
+const districts = skylineLayoutConfig.districts as DistrictRecord[];
+const skylineGrid = skylineLayoutConfig.grid;
 
 const rawRepos: RawRepo[] = [
   {
@@ -605,14 +576,14 @@ const createLotOffsets = (district: DistrictRecord, count: number) => {
     Math.round(Math.sqrt((count * district.size.width) / district.size.depth) * 0.94),
   );
   const rows = Math.max(3, Math.ceil(count / columns));
-  const avenueEvery = 4;
-  const streetEvery = 5;
-  const avenueGap = clamp(district.size.width * 0.045, 5.4, 8.2);
-  const streetGap = clamp(district.size.depth * 0.04, 4.8, 7.2);
+  const avenueEvery = skylineGrid.avenueEvery;
+  const streetEvery = skylineGrid.streetEvery;
+  const avenueGap = skylineGrid.avenueGap;
+  const streetGap = skylineGrid.streetGap;
   const avenueCount = Math.floor((columns - 1) / avenueEvery);
   const streetCount = Math.floor((rows - 1) / streetEvery);
-  const widthBudget = district.size.width * 0.82 - avenueCount * avenueGap;
-  const depthBudget = district.size.depth * 0.82 - streetCount * streetGap;
+  const widthBudget = district.size.width - skylineGrid.marginX * 2 - avenueCount * avenueGap;
+  const depthBudget = district.size.depth - skylineGrid.marginZ * 2 - streetCount * streetGap;
   const stepX = columns > 1 ? widthBudget / (columns - 1) : 0;
   const stepZ = rows > 1 ? depthBudget / (rows - 1) : 0;
   const xPositions: number[] = [];
@@ -696,8 +667,14 @@ const resolveRepoSpacing = (repos: RepoRecord[]) => {
         }
 
         const push = (minimumDistance - distance) * 0.5;
-        const normalX = dx / distance;
-        const normalZ = dz / distance;
+        let normalX = dx / distance;
+        let normalZ = dz / distance;
+
+        if (Math.abs(dx) < 0.001 && Math.abs(dz) < 0.001) {
+          const angle = (leftIndex * 0.73 + rightIndex * 0.41) % (Math.PI * 2);
+          normalX = Math.cos(angle);
+          normalZ = Math.sin(angle);
+        }
         const leftPaddingX = leftDistrict.size.width * 0.42;
         const leftPaddingZ = leftDistrict.size.depth * 0.42;
         const rightPaddingX = rightDistrict.size.width * 0.42;
