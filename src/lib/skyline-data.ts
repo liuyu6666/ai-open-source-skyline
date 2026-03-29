@@ -111,32 +111,32 @@ const districts: DistrictRecord[] = [
   {
     id: "agents",
     color: "#7dd3fc",
-    center: { x: -88, z: -62 },
-    size: { width: 74, depth: 56 },
+    center: { x: -42, z: -24 },
+    size: { width: 92, depth: 72 },
   },
   {
     id: "tooling",
     color: "#f9a8d4",
-    center: { x: 88, z: -62 },
-    size: { width: 74, depth: 56 },
+    center: { x: 44, z: -16 },
+    size: { width: 88, depth: 70 },
   },
   {
     id: "automation",
     color: "#c4b5fd",
-    center: { x: 0, z: -10 },
-    size: { width: 84, depth: 62 },
+    center: { x: 4, z: 14 },
+    size: { width: 112, depth: 88 },
   },
   {
     id: "inference",
     color: "#fcd34d",
-    center: { x: -64, z: 76 },
-    size: { width: 70, depth: 52 },
+    center: { x: -34, z: 62 },
+    size: { width: 84, depth: 64 },
   },
   {
     id: "memory",
     color: "#86efac",
-    center: { x: 64, z: 76 },
-    size: { width: 70, depth: 52 },
+    center: { x: 40, z: 66 },
+    size: { width: 86, depth: 66 },
   },
 ];
 
@@ -598,46 +598,57 @@ const buildChineseLiveDescription = (
 
 const createLotOffsets = (district: DistrictRecord, count: number) => {
   const offsets: { x: number; z: number }[] = [];
-  const cols = Math.max(
-    3,
-    Math.ceil(Math.sqrt(count * (district.size.width / district.size.depth))),
+  const downtownCore = { x: 6, z: 14 };
+  const driftX = (downtownCore.x - district.center.x) * 0.12;
+  const driftZ = (downtownCore.z - district.center.z) * 0.12;
+  const baseAngle = Math.atan2(
+    district.center.z - downtownCore.z,
+    district.center.x - downtownCore.x,
   );
-  const rows = Math.max(2, Math.ceil(count / cols));
-  const usableWidth = district.size.width - 16;
-  const usableDepth = district.size.depth - 16;
-  const stepX = usableWidth / cols;
-  const stepZ = usableDepth / rows;
 
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < cols; column += 1) {
-      const seed = count * 31 + row * 7 + column * 13 + district.center.x;
-
-      offsets.push({
-        x: Number(
-          (
-            -usableWidth / 2 +
-            stepX / 2 +
-            column * stepX +
-            (hashValue(seed) - 0.5) * Math.min(2.2, stepX * 0.34)
-          ).toFixed(1),
-        ),
-        z: Number(
-          (
-            -usableDepth / 2 +
-            stepZ / 2 +
-            row * stepZ +
-            (hashValue(seed + 4.2) - 0.5) * Math.min(2.2, stepZ * 0.34)
-          ).toFixed(1),
-        ),
-      });
+  for (let index = 0; index < count; index += 1) {
+    if (index === 0) {
+      offsets.push({ x: 0, z: 0 });
+      continue;
     }
+
+    const ring = Math.ceil(Math.sqrt(index));
+    const ringStart = (ring - 1) * (ring - 1) + 1;
+    const slot = index - ringStart;
+    const slotCount = Math.max(5, ring * 6);
+    const seed = count * 31 + index * 17 + district.center.x * 0.4;
+    const angle =
+      baseAngle +
+      (slot / slotCount) * Math.PI * 1.88 +
+      (hashValue(seed) - 0.5) * 0.38;
+    const radiusX = Math.min(
+      district.size.width * 0.42,
+      10 + ring * 8.2 + hashValue(seed + 5.1) * 3.8,
+    );
+    const radiusZ = Math.min(
+      district.size.depth * 0.42,
+      8 + ring * 7.4 + hashValue(seed + 9.7) * 3.2,
+    );
+    const spreadX =
+      Math.cos(angle) * radiusX +
+      driftX * ring +
+      (hashValue(seed + 2.2) - 0.5) * 2.8;
+    const spreadZ =
+      Math.sin(angle) * radiusZ +
+      driftZ * ring +
+      (hashValue(seed + 6.4) - 0.5) * 2.5;
+
+    offsets.push({
+      x: Number(spreadX.toFixed(1)),
+      z: Number(spreadZ.toFixed(1)),
+    });
   }
 
   offsets.sort((left, right) => {
-    const leftDistance = Math.hypot(left.x, left.z);
-    const rightDistance = Math.hypot(right.x, right.z);
+    const leftWeight = Math.hypot(left.x - driftX * 2, left.z - driftZ * 2);
+    const rightWeight = Math.hypot(right.x - driftX * 2, right.z - driftZ * 2);
 
-    return leftDistance - rightDistance;
+    return leftWeight - rightWeight;
   });
 
   return offsets.slice(0, count);

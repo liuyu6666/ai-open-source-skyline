@@ -66,6 +66,13 @@ function buildFillerTowers(
           district.center.x - district.size.width / 2 + stepX / 2 + column * stepX;
         const worldZ =
           district.center.z - district.size.depth / 2 + stepZ / 2 + row * stepZ;
+        const normalizedX = (worldX - district.center.x) / (district.size.width / 2);
+        const normalizedZ = (worldZ - district.center.z) / (district.size.depth / 2);
+
+        if (normalizedX * normalizedX + normalizedZ * normalizedZ > 1.06) {
+          continue;
+        }
+
         const nearRepo = repos.some((repo) => {
           const dx = repo.x - worldX;
           const dz = repo.z - worldZ;
@@ -176,37 +183,34 @@ function DistrictPlate({
           onClearSelection();
         }}
         rotation={[-Math.PI / 2, 0, 0]}
+        scale={[district.size.width * 0.54, 1, district.size.depth * 0.48]}
       >
-        <planeGeometry args={[district.size.width, district.size.depth]} />
-        <meshStandardMaterial
-          color={district.color}
-          emissive={district.color}
-          emissiveIntensity={palette.isNight ? 0.09 : 0.03}
-          transparent
-          opacity={0.08}
-        />
-      </mesh>
-
-      <mesh position={[0, 0.08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry
-          args={[
-            Math.min(district.size.width, district.size.depth) * 0.24,
-            Math.min(district.size.width, district.size.depth) * 0.28,
-            40,
-          ]}
-        />
+        <circleGeometry args={[1, 48]} />
         <meshBasicMaterial
           color={district.color}
           transparent
-          opacity={palette.isNight ? 0.22 : 0.14}
+          opacity={palette.isNight ? 0.07 : 0.04}
+        />
+      </mesh>
+
+      <mesh
+        position={[0, 0.08, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        scale={[district.size.width * 0.3, 1, district.size.depth * 0.26]}
+      >
+        <ringGeometry args={[0.72, 1, 52]} />
+        <meshBasicMaterial
+          color={district.color}
+          transparent
+          opacity={palette.isNight ? 0.2 : 0.12}
         />
       </mesh>
 
       <Text
         color="#eef6ff"
-        fontSize={1.55}
+        fontSize={1.22}
         maxWidth={18}
-        position={[0, 0.12, district.size.depth / 2 + 3.2]}
+        position={[0, 0.12, district.size.depth * 0.22]}
         rotation={[-Math.PI / 2, 0, 0]}
       >
         {district.label}
@@ -219,11 +223,13 @@ function RoadStrip({
   position,
   size,
   color,
+  rotationY = 0,
   onClearSelection,
 }: {
   position: [number, number, number];
   size: [number, number];
   color: string;
+  rotationY?: number;
   onClearSelection: () => void;
 }) {
   return (
@@ -233,7 +239,7 @@ function RoadStrip({
         onClearSelection();
       }}
       position={position}
-      rotation={[-Math.PI / 2, 0, 0]}
+      rotation={[-Math.PI / 2, rotationY, 0]}
     >
       <planeGeometry args={size} />
       <meshStandardMaterial color={color} />
@@ -254,6 +260,8 @@ function Building({
 }) {
   const shellRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
+  const crownRef = useRef<THREE.Mesh>(null);
+  const roofHaloRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
@@ -289,6 +297,51 @@ function Building({
       material.opacity = THREE.MathUtils.lerp(
         material.opacity,
         palette.isNight ? 0.9 : 0.28,
+        0.08,
+      );
+    }
+
+    if (crownRef.current) {
+      const material = crownRef.current.material as THREE.MeshStandardMaterial;
+      const targetGlow = palette.isNight
+        ? (0.28 + repo.lightStrength * 1.85) * pulse
+        : (0.18 + repo.lightStrength * 0.92) * pulse;
+
+      material.emissiveIntensity = THREE.MathUtils.lerp(
+        material.emissiveIntensity,
+        targetGlow,
+        0.08,
+      );
+      material.opacity = THREE.MathUtils.lerp(
+        material.opacity,
+        palette.isNight ? 0.88 : 0.58,
+        0.08,
+      );
+    }
+
+    if (roofHaloRef.current) {
+      const material = roofHaloRef.current.material as THREE.MeshBasicMaterial;
+      const targetOpacity = palette.isNight
+        ? 0.12 + repo.lightStrength * 0.22
+        : 0.08 + repo.lightStrength * 0.18;
+      const targetScale = palette.isNight
+        ? 1.02 + repo.lightStrength * 0.4 * pulse
+        : 0.92 + repo.lightStrength * 0.32 * pulse;
+
+      material.opacity = THREE.MathUtils.lerp(material.opacity, targetOpacity, 0.08);
+      roofHaloRef.current.scale.x = THREE.MathUtils.lerp(
+        roofHaloRef.current.scale.x,
+        targetScale,
+        0.08,
+      );
+      roofHaloRef.current.scale.y = THREE.MathUtils.lerp(
+        roofHaloRef.current.scale.y,
+        targetScale,
+        0.08,
+      );
+      roofHaloRef.current.scale.z = THREE.MathUtils.lerp(
+        roofHaloRef.current.scale.z,
+        targetScale,
         0.08,
       );
     }
@@ -374,6 +427,39 @@ function Building({
         />
       </mesh>
 
+      <mesh
+        ref={crownRef}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect(repo.id);
+        }}
+        position={[0, repo.height * 0.72, 0]}
+      >
+        <boxGeometry
+          args={[repo.width * 0.86, Math.max(repo.height * 0.045, 1.5), repo.depth * 0.86]}
+        />
+        <meshStandardMaterial
+          color={repo.color}
+          emissive={repo.color}
+          emissiveIntensity={0.18}
+          transparent
+          opacity={palette.isNight ? 0.86 : 0.56}
+        />
+      </mesh>
+
+      <mesh
+        ref={roofHaloRef}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect(repo.id);
+        }}
+        position={[0, repo.height + 0.9, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <circleGeometry args={[Math.max(repo.width, repo.depth) * 0.42, 36]} />
+        <meshBasicMaterial color={repo.color} transparent opacity={0.14} />
+      </mesh>
+
       {selected ? (
         <Text
           color="#ffffff"
@@ -397,6 +483,7 @@ function FillerBuilding({
   palette: SkyPalette;
 }) {
   const glowRef = useRef<THREE.Mesh>(null);
+  const crownRef = useRef<THREE.Mesh>(null);
 
   useFrame((state) => {
     if (!glowRef.current) {
@@ -414,6 +501,19 @@ function FillerBuilding({
       targetGlow,
       0.08,
     );
+
+    if (crownRef.current) {
+      const crownMaterial = crownRef.current.material as THREE.MeshStandardMaterial;
+      const crownGlow = palette.isNight
+        ? 0.08 + tower.lightStrength * 0.62 * pulse
+        : 0.05 + tower.lightStrength * 0.24 * pulse;
+
+      crownMaterial.emissiveIntensity = THREE.MathUtils.lerp(
+        crownMaterial.emissiveIntensity,
+        crownGlow,
+        0.08,
+      );
+    }
   });
 
   return (
@@ -452,6 +552,19 @@ function FillerBuilding({
           emissiveIntensity={0.03}
           transparent
           opacity={palette.isNight ? 0.28 : 0.09}
+        />
+      </mesh>
+
+      <mesh ref={crownRef} position={[0, tower.height * 0.78, 0]}>
+        <boxGeometry
+          args={[tower.width * 0.82, Math.max(tower.height * 0.05, 0.9), tower.depth * 0.82]}
+        />
+        <meshStandardMaterial
+          color={tower.color}
+          emissive={tower.color}
+          emissiveIntensity={0.08}
+          transparent
+          opacity={palette.isNight ? 0.5 : 0.22}
         />
       </mesh>
     </group>
@@ -532,6 +645,20 @@ function SceneContent({
         onClearSelection={onClearSelection}
         position={[0, -0.05, 0]}
         size={[18, 1180]}
+      />
+      <RoadStrip
+        color={palette.street}
+        onClearSelection={onClearSelection}
+        position={[0, -0.05, 20]}
+        rotationY={Math.PI / 5.4}
+        size={[860, 14]}
+      />
+      <RoadStrip
+        color={palette.street}
+        onClearSelection={onClearSelection}
+        position={[8, -0.05, 4]}
+        rotationY={-Math.PI / 4.8}
+        size={[760, 12]}
       />
 
       <gridHelper
