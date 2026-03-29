@@ -55,8 +55,8 @@ function buildFillerTowers(
   const filler: FillerTower[] = [];
 
   for (const district of districts) {
-    const columns = Math.max(7, Math.round(district.size.width / 4.8));
-    const rows = Math.max(6, Math.round(district.size.depth / 4.8));
+    const columns = Math.max(11, Math.round(district.size.width / 4));
+    const rows = Math.max(9, Math.round(district.size.depth / 4.2));
     const stepX = district.size.width / columns;
     const stepZ = district.size.depth / rows;
 
@@ -70,7 +70,7 @@ function buildFillerTowers(
           const dx = repo.x - worldX;
           const dz = repo.z - worldZ;
 
-          return Math.sqrt(dx * dx + dz * dz) < 8.2;
+          return Math.sqrt(dx * dx + dz * dz) < 10.5;
         });
 
         if (nearRepo) {
@@ -78,18 +78,21 @@ function buildFillerTowers(
         }
 
         const seedBase = worldX * 11.83 + worldZ * 6.07;
-        const offsetX = (hashValue(seedBase) - 0.5) * 1.8;
-        const offsetZ = (hashValue(seedBase + 4.7) - 0.5) * 1.8;
+        const offsetX = (hashValue(seedBase) - 0.5) * 2.4;
+        const offsetZ = (hashValue(seedBase + 4.7) - 0.5) * 2.4;
         const centerDistance = Math.hypot(worldX - district.center.x, worldZ - district.center.z);
         const centrality = Math.max(
           0,
           1 - centerDistance / (Math.max(district.size.width, district.size.depth) * 0.74),
         );
-        const width = 3.6 + hashValue(seedBase + 8.1) * 3.8;
-        const depth = 3.6 + hashValue(seedBase + 12.9) * 4.1;
+        const width = 4.2 + hashValue(seedBase + 8.1) * 4.8;
+        const depth = 4.2 + hashValue(seedBase + 12.9) * 5;
         const height =
-          8 + centrality * 18 + hashValue(seedBase + 17.4) * 14 + (hashValue(seedBase + 24.1) > 0.8 ? 9 : 0);
-        const lightStrength = 0.16 + hashValue(seedBase + 30.3) * 0.58;
+          10 +
+          centrality * 24 +
+          hashValue(seedBase + 17.4) * 18 +
+          (hashValue(seedBase + 24.1) > 0.78 ? 14 : 0);
+        const lightStrength = 0.16 + hashValue(seedBase + 30.3) * 0.6;
 
         filler.push({
           key: `${district.id}-${column}-${row}`,
@@ -105,7 +108,7 @@ function buildFillerTowers(
     }
   }
 
-  for (let index = 0; index < 20; index += 1) {
+  for (let index = 0; index < 34; index += 1) {
     const leftSeed = 500 + index * 3.1;
     const rightSeed = 700 + index * 2.7;
     const backSeed = 900 + index * 2.3;
@@ -114,41 +117,41 @@ function buildFillerTowers(
     filler.push({
       key: `belt-left-${index}`,
       color: "#7faef8",
-      x: Number((-134 + hashValue(leftSeed) * 18).toFixed(1)),
-      z: Number((-102 + index * 10.8 + hashValue(leftSeed + 1.5) * 5).toFixed(1)),
-      width: Number((5.2 + hashValue(leftSeed + 2.6) * 5).toFixed(1)),
-      depth: Number((5 + hashValue(leftSeed + 3.4) * 5).toFixed(1)),
-      height: Number((18 + hashValue(leftSeed + 4.8) * 52).toFixed(1)),
+      x: Number((-214 + hashValue(leftSeed) * 28).toFixed(1)),
+      z: Number((-182 + index * 11.6 + hashValue(leftSeed + 1.5) * 6).toFixed(1)),
+      width: Number((5.8 + hashValue(leftSeed + 2.6) * 6.4).toFixed(1)),
+      depth: Number((5.4 + hashValue(leftSeed + 3.4) * 6.2).toFixed(1)),
+      height: Number((22 + hashValue(leftSeed + 4.8) * 62).toFixed(1)),
       lightStrength: Number((0.12 + hashValue(leftSeed + 5.9) * 0.5).toFixed(2)),
     });
     filler.push({
       key: `belt-right-${index}`,
       color: "#9be4c7",
-      x: Number((134 - hashValue(rightSeed) * 18).toFixed(1)),
-      z: Number((-102 + index * 10.5 + hashValue(rightSeed + 1.6) * 5).toFixed(1)),
-      width: Number((5.4 + hashValue(rightSeed + 2.3) * 5.4).toFixed(1)),
-      depth: Number((5 + hashValue(rightSeed + 3.2) * 5.4).toFixed(1)),
-      height: Number((20 + hashValue(rightSeed + 4.7) * 54).toFixed(1)),
+      x: Number((214 - hashValue(rightSeed) * 28).toFixed(1)),
+      z: Number((-182 + index * 11.4 + hashValue(rightSeed + 1.6) * 6).toFixed(1)),
+      width: Number((5.8 + hashValue(rightSeed + 2.3) * 6.6).toFixed(1)),
+      depth: Number((5.2 + hashValue(rightSeed + 3.2) * 6.2).toFixed(1)),
+      height: Number((22 + hashValue(rightSeed + 4.7) * 64).toFixed(1)),
       lightStrength: Number((0.14 + hashValue(rightSeed + 5.6) * 0.52).toFixed(2)),
     });
     filler.push({
       key: `belt-back-${index}`,
       color: "#8b9cff",
-      x: Number((-112 + index * 11.6 + hashValue(backSeed + 0.8) * 5).toFixed(1)),
-      z: Number((-136 + hashValue(backSeed + 1.7) * 14).toFixed(1)),
-      width: Number((5 + hashValue(backSeed + 2.8) * 5).toFixed(1)),
-      depth: Number((5 + hashValue(backSeed + 3.9) * 5).toFixed(1)),
-      height: Number((18 + hashValue(backSeed + 4.5) * 42).toFixed(1)),
+      x: Number((-192 + index * 11.8 + hashValue(backSeed + 0.8) * 6).toFixed(1)),
+      z: Number((-222 + hashValue(backSeed + 1.7) * 18).toFixed(1)),
+      width: Number((5.4 + hashValue(backSeed + 2.8) * 5.8).toFixed(1)),
+      depth: Number((5.4 + hashValue(backSeed + 3.9) * 5.8).toFixed(1)),
+      height: Number((18 + hashValue(backSeed + 4.5) * 48).toFixed(1)),
       lightStrength: Number((0.12 + hashValue(backSeed + 5.8) * 0.48).toFixed(2)),
     });
     filler.push({
       key: `belt-front-${index}`,
       color: "#c9b46a",
-      x: Number((-112 + index * 11.4 + hashValue(frontSeed + 0.9) * 5).toFixed(1)),
-      z: Number((136 - hashValue(frontSeed + 1.8) * 14).toFixed(1)),
-      width: Number((4.8 + hashValue(frontSeed + 2.7) * 4.8).toFixed(1)),
-      depth: Number((4.8 + hashValue(frontSeed + 3.7) * 4.8).toFixed(1)),
-      height: Number((16 + hashValue(frontSeed + 4.6) * 36).toFixed(1)),
+      x: Number((-192 + index * 11.8 + hashValue(frontSeed + 0.9) * 6).toFixed(1)),
+      z: Number((222 - hashValue(frontSeed + 1.8) * 18).toFixed(1)),
+      width: Number((5.2 + hashValue(frontSeed + 2.7) * 5.4).toFixed(1)),
+      depth: Number((5.2 + hashValue(frontSeed + 3.7) * 5.4).toFixed(1)),
+      height: Number((18 + hashValue(frontSeed + 4.6) * 40).toFixed(1)),
       lightStrength: Number((0.1 + hashValue(frontSeed + 5.5) * 0.44).toFixed(2)),
     });
   }
@@ -467,7 +470,7 @@ function SceneContent({
 
   return (
     <>
-      <fog attach="fog" args={[palette.fog, 120, 900]} />
+      <fog attach="fog" args={[palette.fog, 180, 1400]} />
       <ambientLight intensity={palette.ambient} color="#ffffff" />
       <hemisphereLight args={["#dbeeff", "#09111d", 0.82 + palette.dayFactor * 0.32]} />
       <directionalLight
@@ -490,7 +493,7 @@ function SceneContent({
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, -0.18, 0]}
       >
-        <planeGeometry args={[720, 720]} />
+        <planeGeometry args={[1180, 1180]} />
         <meshStandardMaterial color={palette.ground} />
       </mesh>
 
@@ -498,40 +501,43 @@ function SceneContent({
         color={palette.street}
         onClearSelection={onClearSelection}
         position={[0, -0.05, 0]}
-        size={[720, 16]}
+        size={[1180, 18]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[0, -0.05, -112]}
-        size={[720, 12]}
+        position={[0, -0.05, -182]}
+        size={[1180, 14]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[0, -0.05, 112]}
-        size={[720, 12]}
+        position={[0, -0.05, 182]}
+        size={[1180, 14]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[-146, -0.05, 0]}
-        size={[12, 720]}
+        position={[-228, -0.05, 0]}
+        size={[14, 1180]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[146, -0.05, 0]}
-        size={[12, 720]}
+        position={[228, -0.05, 0]}
+        size={[14, 1180]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
         position={[0, -0.05, 0]}
-        size={[16, 720]}
+        size={[18, 1180]}
       />
 
-      <gridHelper args={[720, 90, palette.districtEdge, palette.districtEdge]} position={[0, 0.02, 0]} />
+      <gridHelper
+        args={[1180, 128, palette.districtEdge, palette.districtEdge]}
+        position={[0, 0.02, 0]}
+      />
 
       {districts.map((district) => (
         <DistrictPlate
@@ -559,10 +565,10 @@ function SceneContent({
       {palette.dayFactor < 0.58 ? (
         <Stars
           count={1600}
-          depth={280}
+          depth={420}
           factor={4}
           fade
-          radius={180}
+          radius={280}
           saturation={0}
           speed={0.2}
         />
@@ -570,11 +576,11 @@ function SceneContent({
 
       <OrbitControls
         enablePan={false}
-        maxDistance={1800}
+        maxDistance={3200}
         maxPolarAngle={Math.PI / 2.08}
         minDistance={18}
         minPolarAngle={Math.PI / 5.8}
-        target={[0, 12, 8]}
+        target={[0, 18, 10]}
       />
     </>
   );
@@ -583,7 +589,7 @@ function SceneContent({
 export function SkylineScene(props: SkylineSceneProps) {
   return (
     <Canvas
-      camera={{ fov: 24, position: [0, 30, 130], far: 3000 }}
+      camera={{ fov: 22, position: [0, 42, 184], far: 5000 }}
       gl={{ antialias: true, alpha: true }}
     >
       <SceneContent {...props} />

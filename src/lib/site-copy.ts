@@ -6,7 +6,8 @@ type SiteCopy = {
   timeLocale: string;
   brand: string;
   title: string;
-  subtitle: string;
+  demoSubtitle: string;
+  liveSubtitle: string;
   refresh: string;
   refreshing: string;
   switchLabel: string;
@@ -55,8 +56,10 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     timeLocale: "zh-CN",
     brand: "GitHub 天际线雷达",
     title: "把 AI 开源项目做成一座可观察的 3D 城市。",
-    subtitle:
+    demoSubtitle:
       "当前楼体形态和数据仍是示例快照，用来先验证视觉表达和信息结构；下一步会切到真实 GitHub 增量抓取。",
+    liveSubtitle:
+      "当前优先接 GitHub 官方 API 的实时快照，不走传统爬虫；新增、热度和更新频率会逐步从真实仓库事件填充。",
     refresh: "刷新快照",
     refreshing: "刷新中…",
     switchLabel: "切换到英文版",
@@ -71,19 +74,19 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     stats: {
       tracked: {
         label: "跟踪仓库",
-        note: "当前示例池里的相关项目规模",
+        note: "当前快照中纳入城市的相关项目数量",
       },
       newborn: {
         label: "24 小时新增",
-        note: "后续会由真实 CreateEvent 填充",
+        note: "最近一天新出现或刚进入视野的项目",
       },
       stars: {
         label: "7 日 star 增量",
-        note: "适合判断整体热度斜率",
+        note: "用来判断整体热度斜率",
       },
       updates: {
         label: "7 日更新事件",
-        note: "夜间楼灯强度的核心来源",
+        note: "夜间楼灯亮度的核心来源",
       },
       momentum: {
         label: "增长最快",
@@ -127,8 +130,10 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     timeLocale: "en-US",
     brand: "GitHub Skyline Radar",
     title: "Turn AI open-source projects into a readable 3D city.",
-    subtitle:
+    demoSubtitle:
       "The towers and numbers are still demo snapshots for validating the visual language and information architecture; the next step is wiring in real GitHub incremental ingestion.",
+    liveSubtitle:
+      "The app now prefers live snapshots from the official GitHub API instead of a traditional crawler; newborn repos, heat, and update cadence will increasingly come from real repository events.",
     refresh: "Refresh snapshot",
     refreshing: "Refreshing…",
     switchLabel: "Switch to Chinese",
@@ -143,11 +148,11 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     stats: {
       tracked: {
         label: "Tracked repos",
-        note: "Current size of the demo discovery pool",
+        note: "Projects currently represented in the skyline",
       },
       newborn: {
         label: "New in 24h",
-        note: "Will later come from real CreateEvent ingestion",
+        note: "Projects that just appeared or entered the watch window",
       },
       stars: {
         label: "Stars in 7d",

@@ -14,6 +14,8 @@ export function generateStaticParams() {
   return [{ locale: "zh" }, { locale: "en" }];
 }
 
+export const dynamic = "force-dynamic";
+
 export default async function LocalePage({ params }: LocalePageProps) {
   const { locale } = await params;
 
@@ -23,5 +25,5 @@ export default async function LocalePage({ params }: LocalePageProps) {
 
   getSiteCopy(locale);
 
-  return <SkylineApp initialSnapshot={getSkylineSnapshot()} locale={locale} />;
+  return <SkylineApp initialSnapshot={await getSkylineSnapshot()} locale={locale} />;
 }

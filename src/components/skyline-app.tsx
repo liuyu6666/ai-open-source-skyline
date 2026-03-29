@@ -120,7 +120,7 @@ function StatTile({
 }
 
 function Sparkline({ points }: { points: number[] }) {
-  const peak = Math.max(...points);
+  const peak = Math.max(...points, 1);
 
   return (
     <div className="sparkline" aria-hidden="true">
@@ -226,7 +226,7 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
           <div className="brand-panel">
             <span className="eyebrow">{copy.brand}</span>
             <h1>{copy.title}</h1>
-            <p>{copy.subtitle}</p>
+            <p>{snapshot.demoMode ? copy.demoSubtitle : copy.liveSubtitle}</p>
           </div>
 
           <div className="top-rail">

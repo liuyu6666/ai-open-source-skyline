@@ -13,6 +13,8 @@
 
 ```bash
 npm install
+cp .env.example .env.local
+# 填入 GITHUB_TOKEN 可切到真实 GitHub 快照；不填则自动回退到 demo
 npm run dev
 ```
 
@@ -24,9 +26,27 @@ npm run dev
 
 - 页面服务端先调用 `getSkylineSnapshot()`
 - `/api/skyline` 返回同一份结构化快照
-- 数据源目前是 `src/lib/skyline-data.ts` 里的 demo 数据
+- 数据源优先走 `GITHUB_TOKEN` 驱动的 GitHub 官方 API 快照
+- 没有 token 或 API 失败时，自动回退到 `src/lib/skyline-data.ts` 里的 demo 数据
 
 这样做的目的是先把前后端协议、场景编码和 UI 决策固定下来，后面可以直接替换真实抓取任务，而不用重写前端。
+
+## 真实数据是不是一定要写爬虫
+
+第一版不需要。
+
+- 当前实现优先用 GitHub 官方 API
+- 基础盘用一组 watchlist 仓库获取真实 stars / push 时间 / repo events
+- 增量发现用 GitHub Search 拉近 21 天的新项目
+- 右侧 7 日 star 脉冲和夜间楼灯，当前来自 repo public events 的真实事件采样
+
+这意味着第一版更像“官方 API 驱动的数据采集”，不是传统网页爬虫。
+
+真正需要 crawler 的情况通常是：
+
+- 你要抓 GitHub API 没给的页面级信息
+- 你要补 README / 官网 / 文档站的额外语义特征
+- 你要覆盖更大的生态来源，而不只是 GitHub
 
 ## 建议的真实数据方案
 
@@ -75,4 +95,3 @@ skyline_snapshots
 - 增加“今日新增仓库”自动抓取
 - 增加 README 语义聚类，取代当前手工社区坐标
 - 保留现在的楼房版本，同时新增 3D 地形图模式
-

@@ -71,71 +71,74 @@ type RawRepo = {
   trend: number[];
 };
 
+type GitHubSearchResponse = {
+  items: GitHubRepository[];
+};
+
+type GitHubRepository = {
+  id: number;
+  name: string;
+  full_name: string;
+  description: string | null;
+  stargazers_count: number;
+  owner: {
+    login: string;
+  };
+  created_at: string;
+  pushed_at: string;
+};
+
+type GitHubEvent = {
+  type: string;
+  created_at: string;
+  actor?: {
+    login?: string;
+  };
+};
+
+type SearchSeed = {
+  domain: DomainKey;
+  perPage: number;
+  query: string;
+  sort: "updated";
+};
+
+const dayMs = 24 * 60 * 60 * 1000;
+const hourMs = 60 * 60 * 1000;
+const liveCacheTtlMs = 12 * 60 * 1000;
+
 const districts: DistrictRecord[] = [
   {
     id: "agents",
     color: "#7dd3fc",
-    center: { x: -34, z: -20 },
-    size: { width: 32, depth: 26 },
+    center: { x: -88, z: -62 },
+    size: { width: 74, depth: 56 },
   },
   {
     id: "tooling",
     color: "#f9a8d4",
-    center: { x: 34, z: -20 },
-    size: { width: 32, depth: 26 },
+    center: { x: 88, z: -62 },
+    size: { width: 74, depth: 56 },
   },
   {
     id: "automation",
     color: "#c4b5fd",
-    center: { x: 0, z: -2 },
-    size: { width: 36, depth: 28 },
+    center: { x: 0, z: -10 },
+    size: { width: 84, depth: 62 },
   },
   {
     id: "inference",
     color: "#fcd34d",
-    center: { x: -24, z: 28 },
-    size: { width: 30, depth: 24 },
+    center: { x: -64, z: 76 },
+    size: { width: 70, depth: 52 },
   },
   {
     id: "memory",
     color: "#86efac",
-    center: { x: 24, z: 28 },
-    size: { width: 30, depth: 24 },
+    center: { x: 64, z: 76 },
+    size: { width: 70, depth: 52 },
   },
 ];
-
-const districtLots: Record<DomainKey, { x: number; z: number }[]> = {
-  agents: [
-    { x: -9, z: -7 },
-    { x: 8, z: -7 },
-    { x: -8, z: 7 },
-    { x: 8, z: 6 },
-  ],
-  tooling: [
-    { x: -8, z: -7 },
-    { x: 9, z: -6 },
-    { x: -9, z: 7 },
-    { x: 7, z: 8 },
-  ],
-  automation: [
-    { x: -11, z: -7 },
-    { x: 10, z: -7 },
-    { x: -10, z: 8 },
-    { x: 10, z: 8 },
-  ],
-  inference: [
-    { x: -8, z: -6 },
-    { x: 8, z: -7 },
-    { x: -7, z: 7 },
-    { x: 8, z: 7 },
-  ],
-  memory: [
-    { x: -8, z: -6 },
-    { x: 8, z: -6 },
-    { x: -7, z: 7 },
-    { x: 8, z: 7 },
-  ],
-};
 
 const rawRepos: RawRepo[] = [
   {
@@ -506,7 +509,7 @@ const rawRepos: RawRepo[] = [
     fullName: "chroma-core/chroma",
     description: {
       zh: "向量数据库，基盘稳定，但最近涨幅相对平缓。",
-      en: "Vector store with broad usage but calmer week-over-week momentum.",
+      en: "Vector store with broad usage but calmer week-on-week momentum.",
     },
     domain: "memory",
     totalStars: 17600,
@@ -521,44 +524,179 @@ const rawRepos: RawRepo[] = [
 ];
 
 const districtIndex = new Map(districts.map((district) => [district.id, district]));
+const curatedLiveRepoSeeds = rawRepos
+  .filter((repo) => repo.fullName !== "mshumer/WebVoyager")
+  .map((repo) => ({
+    domain: repo.domain,
+    fullName: repo.fullName,
+  }));
 
-const scoreRepo = (repo: RawRepo) => {
-  const starBase = Math.log10(repo.totalStars + 1) * 12;
-  const weeklyStarVelocity = repo.starDelta7d * 0.019;
-  const updateSignal = repo.updateEvents7d * 0.46;
-  const contributorSignal = repo.contributors30d * 0.42;
-  const newbornBoost =
-    repo.createdDaysAgo <= 1 ? 10 : repo.createdDaysAgo <= 14 ? 6 : repo.createdDaysAgo <= 45 ? 3 : 0;
+let cachedLiveSnapshot: SkylineSnapshot | null = null;
+let cachedLiveAt = 0;
+let liveInFlight: Promise<SkylineSnapshot | null> | null = null;
 
-  return starBase + weeklyStarVelocity + updateSignal + contributorSignal + newbornBoost;
-};
+const updateEventTypes = new Set([
+  "PushEvent",
+  "PullRequestEvent",
+  "IssuesEvent",
+  "PullRequestReviewEvent",
+  "IssueCommentEvent",
+  "ReleaseEvent",
+  "CreateEvent",
+]);
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-export const getSkylineSnapshot = (): SkylineSnapshot => {
-  const maxUpdates = Math.max(...rawRepos.map((repo) => repo.updateEvents7d));
-  const domainCounters = new Map<DomainKey, number>();
+const scoreRepo = (repo: RawRepo) => {
+  const starBase = Math.log10(repo.totalStars + 1) * 12;
+  const weeklyStarVelocity = repo.starDelta7d * 0.018;
+  const updateSignal = repo.updateEvents7d * 0.52;
+  const contributorSignal = repo.contributors30d * 0.44;
+  const newbornBoost =
+    repo.createdDaysAgo <= 1 ? 11 : repo.createdDaysAgo <= 7 ? 8 : repo.createdDaysAgo <= 30 ? 4 : 0;
 
-  const repos = rawRepos.map((repo) => {
-    const district = districtIndex.get(repo.domain);
+  return starBase + weeklyStarVelocity + updateSignal + contributorSignal + newbornBoost;
+};
+
+const hashValue = (seed: number) => {
+  const value = Math.sin(seed) * 43758.5453123;
+
+  return value - Math.floor(value);
+};
+
+const toIsoDate = (date: Date) => date.toISOString().slice(0, 10);
+
+const daysSince = (isoString: string) =>
+  Math.max(0, Math.floor((Date.now() - new Date(isoString).getTime()) / dayMs));
+
+const hoursSince = (isoString: string) =>
+  Math.max(0, Math.floor((Date.now() - new Date(isoString).getTime()) / hourMs));
+
+const normalizeDescription = (value: string | null | undefined, fallback: string) => {
+  const nextValue = value?.trim();
+
+  return nextValue && nextValue.length > 0 ? nextValue : fallback;
+};
+
+const buildChineseLiveDescription = (
+  domain: DomainKey,
+  repo: GitHubRepository,
+  starDelta7d: number,
+  updateEvents7d: number,
+) => {
+  const domainLabel: Record<DomainKey, string> = {
+    agents: "代理系统",
+    tooling: "开发工具",
+    automation: "浏览器自动化",
+    inference: "推理与服务",
+    memory: "记忆与数据",
+  };
+
+  return `${repo.name} 属于${domainLabel[domain]}方向，当前 ${repo.stargazers_count.toLocaleString("zh-CN")} star，最近 7 天记录到 ${starDelta7d.toLocaleString("zh-CN")} 次 star 事件和 ${updateEvents7d.toLocaleString("zh-CN")} 次公开更新。`;
+};
+
+const createLotOffsets = (district: DistrictRecord, count: number) => {
+  const offsets: { x: number; z: number }[] = [];
+  const cols = Math.max(
+    3,
+    Math.ceil(Math.sqrt(count * (district.size.width / district.size.depth))),
+  );
+  const rows = Math.max(2, Math.ceil(count / cols));
+  const usableWidth = district.size.width - 16;
+  const usableDepth = district.size.depth - 16;
+  const stepX = usableWidth / cols;
+  const stepZ = usableDepth / rows;
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < cols; column += 1) {
+      const seed = count * 31 + row * 7 + column * 13 + district.center.x;
+
+      offsets.push({
+        x: Number(
+          (
+            -usableWidth / 2 +
+            stepX / 2 +
+            column * stepX +
+            (hashValue(seed) - 0.5) * Math.min(2.2, stepX * 0.34)
+          ).toFixed(1),
+        ),
+        z: Number(
+          (
+            -usableDepth / 2 +
+            stepZ / 2 +
+            row * stepZ +
+            (hashValue(seed + 4.2) - 0.5) * Math.min(2.2, stepZ * 0.34)
+          ).toFixed(1),
+        ),
+      });
+    }
+  }
+
+  offsets.sort((left, right) => {
+    const leftDistance = Math.hypot(left.x, left.z);
+    const rightDistance = Math.hypot(right.x, right.z);
+
+    return leftDistance - rightDistance;
+  });
+
+  return offsets.slice(0, count);
+};
+
+const buildSkylineSnapshot = (
+  sourceRepos: RawRepo[],
+  { demoMode }: { demoMode: boolean },
+): SkylineSnapshot => {
+  const scoredRepos = sourceRepos
+    .map((repo) => ({ repo, score: scoreRepo(repo) }))
+    .sort((left, right) => right.score - left.score);
+
+  const grouped = new Map<DomainKey, { repo: RawRepo; score: number }[]>();
+
+  for (const entry of scoredRepos) {
+    const bucket = grouped.get(entry.repo.domain) ?? [];
+    bucket.push(entry);
+    grouped.set(entry.repo.domain, bucket);
+  }
+
+  const lotsByRepoId = new Map<string, { x: number; z: number }>();
+
+  for (const [domain, items] of grouped) {
+    const district = districtIndex.get(domain);
 
     if (!district) {
-      throw new Error(`Missing district mapping for ${repo.domain}`);
+      continue;
     }
 
-    const lotIndex = domainCounters.get(repo.domain) ?? 0;
-    const lot = districtLots[repo.domain][lotIndex];
-    domainCounters.set(repo.domain, lotIndex + 1);
+    const offsets = createLotOffsets(district, items.length);
 
-    if (!lot) {
-      throw new Error(`Missing lot mapping for ${repo.domain} at index ${lotIndex}`);
+    items.forEach((entry, index) => {
+      const lot = offsets[index];
+
+      if (!lot) {
+        return;
+      }
+
+      lotsByRepoId.set(entry.repo.id, {
+        x: Number((district.center.x + lot.x).toFixed(1)),
+        z: Number((district.center.z + lot.z).toFixed(1)),
+      });
+    });
+  }
+
+  const maxUpdates = Math.max(1, ...sourceRepos.map((repo) => repo.updateEvents7d));
+
+  const repos = scoredRepos.map(({ repo, score }) => {
+    const district = districtIndex.get(repo.domain);
+    const lot = lotsByRepoId.get(repo.id);
+
+    if (!district || !lot) {
+      throw new Error(`Missing skyline layout for ${repo.fullName}`);
     }
 
-    const score = scoreRepo(repo);
-    const width = clamp(5.6 + Math.log10(repo.totalStars + 10) * 1.5, 6.2, 12.5);
-    const depth = clamp(5.4 + Math.sqrt(repo.updateEvents7d) * 0.52, 6.0, 11.8);
-    const height = clamp(12 + score * 0.58, 14, 40);
+    const width = clamp(7.2 + Math.log10(repo.totalStars + 10) * 1.8, 8.2, 18.6);
+    const depth = clamp(7 + Math.sqrt(repo.updateEvents7d + 1) * 0.62, 8.2, 17.2);
+    const height = clamp(18 + score * 0.8, 22, 78);
 
     return {
       ...repo,
@@ -566,18 +704,18 @@ export const getSkylineSnapshot = (): SkylineSnapshot => {
       score: Number(score.toFixed(1)),
       width: Number(width.toFixed(1)),
       depth: Number(depth.toFixed(1)),
-      lotWidth: Number((width + 4.2).toFixed(1)),
-      lotDepth: Number((depth + 4.2).toFixed(1)),
+      lotWidth: Number((width + 5.6).toFixed(1)),
+      lotDepth: Number((depth + 5.6).toFixed(1)),
       height: Number(height.toFixed(1)),
       lightStrength: Number((repo.updateEvents7d / maxUpdates).toFixed(2)),
-      x: Number((district.center.x + lot.x).toFixed(1)),
-      z: Number((district.center.z + lot.z).toFixed(1)),
+      x: lot.x,
+      z: lot.z,
     };
   });
 
   return {
     generatedAt: new Date().toISOString(),
-    demoMode: true,
+    demoMode,
     stats: {
       trackedRepos: repos.length,
       newRepos24h: repos.filter((repo) => repo.createdDaysAgo <= 1).length,
@@ -585,6 +723,312 @@ export const getSkylineSnapshot = (): SkylineSnapshot => {
       updates7d: repos.reduce((sum, repo) => sum + repo.updateEvents7d, 0),
     },
     districts,
-    repos: repos.sort((a, b) => b.score - a.score),
+    repos,
   };
 };
+
+const getDemoSkylineSnapshot = () => buildSkylineSnapshot(rawRepos, { demoMode: true });
+
+const getLiveToken = () =>
+  process.env.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || null;
+
+const buildLiveSearchSeeds = (): SearchSeed[] => {
+  const recentDate = toIsoDate(new Date(Date.now() - 21 * dayMs));
+
+  return [
+    {
+      domain: "agents",
+      perPage: 8,
+      query: `agent ai in:name,description created:>=${recentDate} archived:false mirror:false stars:>2`,
+      sort: "updated",
+    },
+    {
+      domain: "tooling",
+      perPage: 8,
+      query:
+        `("coding assistant" OR copilot OR "ai coding") in:name,description created:>=${recentDate} archived:false mirror:false stars:>2`,
+      sort: "updated",
+    },
+    {
+      domain: "automation",
+      perPage: 8,
+      query:
+        `("browser automation" OR "computer use" OR "browser agent") in:name,description created:>=${recentDate} archived:false mirror:false stars:>2`,
+      sort: "updated",
+    },
+    {
+      domain: "inference",
+      perPage: 8,
+      query:
+        `("inference engine" OR "llm serving" OR "inference server") in:name,description created:>=${recentDate} archived:false mirror:false stars:>2`,
+      sort: "updated",
+    },
+    {
+      domain: "memory",
+      perPage: 8,
+      query:
+        `("agent memory" OR rag OR "vector database") in:name,description created:>=${recentDate} archived:false mirror:false stars:>2`,
+      sort: "updated",
+    },
+  ];
+};
+
+const fetchGitHubJson = async <T>(path: string, token: string) => {
+  const response = await fetch(`https://api.github.com${path}`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "ai-open-source-skyline",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    next: {
+      revalidate: Math.floor(liveCacheTtlMs / 1000),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub request failed: ${response.status} ${path}`);
+  }
+
+  return (await response.json()) as T;
+};
+
+const fetchSearchRepos = async (seed: SearchSeed, token: string) => {
+  const search = new URLSearchParams({
+    order: "desc",
+    per_page: seed.perPage.toString(),
+    q: seed.query,
+    sort: seed.sort,
+  });
+
+  const response = await fetchGitHubJson<GitHubSearchResponse>(
+    `/search/repositories?${search.toString()}`,
+    token,
+  );
+
+  return response.items.map((repo) => ({ domain: seed.domain, repo }));
+};
+
+const fetchRepo = async (fullName: string, token: string) =>
+  fetchGitHubJson<GitHubRepository>(`/repos/${fullName}`, token);
+
+const computeLiveSignals = (events: GitHubEvent[]) => {
+  const starTrend = Array.from({ length: 7 }, () => 0);
+  const contributorSet = new Set<string>();
+  let starDelta1d = 0;
+  let starDelta7d = 0;
+  let updateEvents7d = 0;
+
+  for (const event of events) {
+    const ageMs = Date.now() - new Date(event.created_at).getTime();
+
+    if (Number.isNaN(ageMs) || ageMs < 0) {
+      continue;
+    }
+
+    if (event.type === "WatchEvent" && ageMs <= 7 * dayMs) {
+      const dayOffset = Math.floor(ageMs / dayMs);
+      const trendIndex = 6 - dayOffset;
+
+      if (trendIndex >= 0 && trendIndex < starTrend.length) {
+        starTrend[trendIndex] += 1;
+      }
+
+      starDelta7d += 1;
+
+      if (ageMs <= dayMs) {
+        starDelta1d += 1;
+      }
+    }
+
+    if (updateEventTypes.has(event.type)) {
+      if (ageMs <= 7 * dayMs) {
+        updateEvents7d += 1;
+      }
+
+      if (ageMs <= 30 * dayMs && event.actor?.login) {
+        contributorSet.add(event.actor.login);
+      }
+    }
+  }
+
+  return {
+    contributors30d: contributorSet.size,
+    starDelta1d,
+    starDelta7d,
+    trend: starTrend,
+    updateEvents7d,
+  };
+};
+
+const buildLiveRawRepo = async (
+  repo: GitHubRepository,
+  domain: DomainKey,
+  token: string,
+): Promise<RawRepo> => {
+  const events = await fetchGitHubJson<GitHubEvent[]>(
+    `/repos/${repo.full_name}/events?per_page=100`,
+    token,
+  ).catch(() => [] as GitHubEvent[]);
+  const signals = computeLiveSignals(events);
+  const fallbackDescription = normalizeDescription(
+    repo.description,
+    `${repo.name} is an active open-source project inside the AI ecosystem.`,
+  );
+
+  return {
+    id: repo.full_name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    owner: repo.owner.login,
+    name: repo.name,
+    fullName: repo.full_name,
+    description: {
+      zh: buildChineseLiveDescription(
+        domain,
+        repo,
+        signals.starDelta7d,
+        signals.updateEvents7d,
+      ),
+      en: fallbackDescription,
+    },
+    domain,
+    totalStars: repo.stargazers_count,
+    starDelta1d: signals.starDelta1d,
+    starDelta7d: signals.starDelta7d,
+    updateEvents7d: signals.updateEvents7d,
+    contributors30d: signals.contributors30d,
+    createdDaysAgo: daysSince(repo.created_at),
+    lastPushHoursAgo: hoursSince(repo.pushed_at),
+    trend: signals.trend,
+  };
+};
+
+const rankCandidate = (repo: GitHubRepository) => {
+  const freshnessBoost = Math.max(0, 28 - daysSince(repo.created_at)) * 4;
+
+  return repo.stargazers_count + freshnessBoost;
+};
+
+const pickBalancedCandidates = (
+  candidates: { domain: DomainKey; repo: GitHubRepository }[],
+  perDomainLimit: number,
+  globalLimit: number,
+) => {
+  const buckets = new Map<DomainKey, GitHubRepository[]>();
+
+  for (const candidate of candidates) {
+    const bucket = buckets.get(candidate.domain) ?? [];
+    bucket.push(candidate.repo);
+    buckets.set(candidate.domain, bucket);
+  }
+
+  const selected: { domain: DomainKey; repo: GitHubRepository }[] = [];
+
+  for (const [domain, bucket] of buckets) {
+    bucket
+      .sort((left, right) => rankCandidate(right) - rankCandidate(left))
+      .slice(0, perDomainLimit)
+      .forEach((repo) => selected.push({ domain, repo }));
+  }
+
+  return selected
+    .sort((left, right) => rankCandidate(right.repo) - rankCandidate(left.repo))
+    .slice(0, globalLimit);
+};
+
+const getLiveSkylineSnapshot = async () => {
+  const token = getLiveToken();
+
+  if (!token) {
+    return null;
+  }
+
+  const now = Date.now();
+
+  if (cachedLiveSnapshot && now - cachedLiveAt < liveCacheTtlMs) {
+    return cachedLiveSnapshot;
+  }
+
+  if (liveInFlight) {
+    return liveInFlight;
+  }
+
+  liveInFlight = (async () => {
+    try {
+      const seeds = buildLiveSearchSeeds();
+      const [curatedRepos, searchResults] = await Promise.all([
+        Promise.allSettled(
+          curatedLiveRepoSeeds.map(async (seed) => ({
+            domain: seed.domain,
+            repo: await fetchRepo(seed.fullName, token),
+          })),
+        ),
+        Promise.allSettled(
+        seeds.map((seed) => fetchSearchRepos(seed, token)),
+        ),
+      ]);
+      const deduped = new Map<string, { domain: DomainKey; repo: GitHubRepository }>();
+
+      for (const result of curatedRepos) {
+        if (result.status !== "fulfilled") {
+          console.warn("GitHub skyline curated repo failed", result.reason);
+          continue;
+        }
+
+        deduped.set(result.value.repo.full_name.toLowerCase(), result.value);
+      }
+
+      const searchCandidates: { domain: DomainKey; repo: GitHubRepository }[] = [];
+
+      for (const result of searchResults) {
+        if (result.status !== "fulfilled") {
+          console.warn("GitHub skyline search seed failed", result.reason);
+          continue;
+        }
+
+        for (const item of result.value) {
+          if (!deduped.has(item.repo.full_name.toLowerCase())) {
+            searchCandidates.push(item);
+          }
+        }
+      }
+
+      for (const item of pickBalancedCandidates(searchCandidates, 2, 10)) {
+        deduped.set(item.repo.full_name.toLowerCase(), item);
+      }
+
+      const selected = [...deduped.values()];
+
+      if (selected.length < 6) {
+        console.warn("GitHub skyline live snapshot fell back to demo due to low repo count", {
+          deduped: deduped.size,
+          selected: selected.length,
+        });
+        return null;
+      }
+
+      const liveRepos = await Promise.all(
+        selected.map((item) => buildLiveRawRepo(item.repo, item.domain, token)),
+      );
+      const snapshot = buildSkylineSnapshot(liveRepos, { demoMode: false });
+
+      cachedLiveSnapshot = snapshot;
+      cachedLiveAt = Date.now();
+
+      return snapshot;
+    } catch (error) {
+      console.error("Failed to build live skyline snapshot", error);
+
+      return null;
+    } finally {
+      liveInFlight = null;
+    }
+  })();
+
+  return liveInFlight;
+};
+
+export async function getSkylineSnapshot(): Promise<SkylineSnapshot> {
+  const liveSnapshot = await getLiveSkylineSnapshot();
+
+  return liveSnapshot ?? getDemoSkylineSnapshot();
+}
