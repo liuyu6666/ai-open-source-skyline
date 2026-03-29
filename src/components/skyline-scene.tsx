@@ -42,78 +42,22 @@ type FillerTower = {
   lightStrength: number;
 };
 
+type CompoundTower = {
+  x: number;
+  z: number;
+  width: number;
+  depth: number;
+  height: number;
+};
+
 const hashValue = (seed: number) => {
   const value = Math.sin(seed) * 43758.5453123;
 
   return value - Math.floor(value);
 };
 
-function buildFillerTowers(
-  districts: LabeledDistrict[],
-  repos: RepoRecord[],
-): FillerTower[] {
+function buildFillerTowers(): FillerTower[] {
   const filler: FillerTower[] = [];
-
-  for (const district of districts) {
-    const columns = Math.max(11, Math.round(district.size.width / 4));
-    const rows = Math.max(9, Math.round(district.size.depth / 4.2));
-    const stepX = district.size.width / columns;
-    const stepZ = district.size.depth / rows;
-
-    for (let column = 0; column < columns; column += 1) {
-      for (let row = 0; row < rows; row += 1) {
-        const worldX =
-          district.center.x - district.size.width / 2 + stepX / 2 + column * stepX;
-        const worldZ =
-          district.center.z - district.size.depth / 2 + stepZ / 2 + row * stepZ;
-        const normalizedX = (worldX - district.center.x) / (district.size.width / 2);
-        const normalizedZ = (worldZ - district.center.z) / (district.size.depth / 2);
-
-        if (normalizedX * normalizedX + normalizedZ * normalizedZ > 1.06) {
-          continue;
-        }
-
-        const nearRepo = repos.some((repo) => {
-          const dx = repo.x - worldX;
-          const dz = repo.z - worldZ;
-
-          return Math.sqrt(dx * dx + dz * dz) < 10.5;
-        });
-
-        if (nearRepo) {
-          continue;
-        }
-
-        const seedBase = worldX * 11.83 + worldZ * 6.07;
-        const offsetX = (hashValue(seedBase) - 0.5) * 2.4;
-        const offsetZ = (hashValue(seedBase + 4.7) - 0.5) * 2.4;
-        const centerDistance = Math.hypot(worldX - district.center.x, worldZ - district.center.z);
-        const centrality = Math.max(
-          0,
-          1 - centerDistance / (Math.max(district.size.width, district.size.depth) * 0.74),
-        );
-        const width = 4.2 + hashValue(seedBase + 8.1) * 4.8;
-        const depth = 4.2 + hashValue(seedBase + 12.9) * 5;
-        const height =
-          10 +
-          centrality * 24 +
-          hashValue(seedBase + 17.4) * 18 +
-          (hashValue(seedBase + 24.1) > 0.78 ? 14 : 0);
-        const lightStrength = 0.16 + hashValue(seedBase + 30.3) * 0.6;
-
-        filler.push({
-          key: `${district.id}-${column}-${row}`,
-          color: district.color,
-          x: Number((worldX + offsetX).toFixed(1)),
-          z: Number((worldZ + offsetZ).toFixed(1)),
-          width: Number(width.toFixed(1)),
-          depth: Number(depth.toFixed(1)),
-          height: Number(height.toFixed(1)),
-          lightStrength: Number(lightStrength.toFixed(2)),
-        });
-      }
-    }
-  }
 
   for (let index = 0; index < 34; index += 1) {
     const leftSeed = 500 + index * 3.1;
@@ -182,6 +126,7 @@ function DistrictPlate({
           event.stopPropagation();
           onClearSelection();
         }}
+        position={[0, -0.16, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         scale={[district.size.width * 0.54, 1, district.size.depth * 0.48]}
       >
@@ -189,12 +134,13 @@ function DistrictPlate({
         <meshBasicMaterial
           color={district.color}
           transparent
+          depthWrite={false}
           opacity={palette.isNight ? 0.07 : 0.04}
         />
       </mesh>
 
       <mesh
-        position={[0, 0.08, 0]}
+        position={[0, -0.14, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         scale={[district.size.width * 0.3, 1, district.size.depth * 0.26]}
       >
@@ -202,6 +148,7 @@ function DistrictPlate({
         <meshBasicMaterial
           color={district.color}
           transparent
+          depthWrite={false}
           opacity={palette.isNight ? 0.2 : 0.12}
         />
       </mesh>
@@ -210,7 +157,7 @@ function DistrictPlate({
         color="#eef6ff"
         fontSize={1.22}
         maxWidth={18}
-        position={[0, 0.12, district.size.depth * 0.22]}
+        position={[0, -0.12, district.size.depth * 0.22]}
         rotation={[-Math.PI / 2, 0, 0]}
       >
         {district.label}
@@ -242,9 +189,33 @@ function RoadStrip({
       rotation={[-Math.PI / 2, rotationY, 0]}
     >
       <planeGeometry args={size} />
-      <meshStandardMaterial color={color} />
+      <meshStandardMaterial color={color} polygonOffset polygonOffsetFactor={-2} />
     </mesh>
   );
+}
+
+function getCompoundBounds(repo: RepoRecord, annexTowers: CompoundTower[]) {
+  let minX = -repo.width / 2;
+  let maxX = repo.width / 2;
+  let minZ = -repo.depth / 2;
+  let maxZ = repo.depth / 2;
+  let maxHeight = repo.height;
+
+  for (const tower of annexTowers) {
+    minX = Math.min(minX, tower.x - tower.width / 2);
+    maxX = Math.max(maxX, tower.x + tower.width / 2);
+    minZ = Math.min(minZ, tower.z - tower.depth / 2);
+    maxZ = Math.max(maxZ, tower.z + tower.depth / 2);
+    maxHeight = Math.max(maxHeight, tower.height);
+  }
+
+  return {
+    width: maxX - minX + 1.6,
+    depth: maxZ - minZ + 1.6,
+    height: maxHeight + 4,
+    centerX: (minX + maxX) / 2,
+    centerZ: (minZ + maxZ) / 2,
+  };
 }
 
 function Building({
@@ -263,6 +234,80 @@ function Building({
   const crownRef = useRef<THREE.Mesh>(null);
   const roofHaloRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
+  const annexTowers = useMemo(() => {
+    const towers: CompoundTower[] = [];
+
+    towers.push({
+      x: -repo.width * 0.42,
+      z: repo.depth * 0.08,
+      width: repo.width * 0.4,
+      depth: repo.depth * 0.56,
+      height: repo.height * 0.52,
+    });
+    towers.push({
+      x: repo.width * 0.38,
+      z: repo.depth * 0.14,
+      width: repo.width * 0.34,
+      depth: repo.depth * 0.5,
+      height: repo.height * 0.46,
+    });
+
+    if (repo.score > 20 || repo.updateEvents7d > 18) {
+      towers.push({
+        x: -repo.width * 0.08,
+        z: -repo.depth * 0.46,
+        width: repo.width * 0.3,
+        depth: repo.depth * 0.34,
+        height: repo.height * 0.32,
+      });
+    }
+
+    if (repo.score > 26 || repo.updateEvents7d > 24) {
+      towers.push({
+        x: repo.width * 0.46,
+        z: -repo.depth * 0.12,
+        width: repo.width * 0.44,
+        depth: repo.depth * 0.52,
+        height: repo.height * 0.58,
+      });
+    }
+
+    if (repo.score > 30 || repo.starDelta7d > 90) {
+      towers.push({
+        x: repo.width * 0.08,
+        z: repo.depth * 0.44,
+        width: repo.width * 0.34,
+        depth: repo.depth * 0.4,
+        height: repo.height * 0.38,
+      });
+    }
+
+    if (repo.score > 36 || repo.starDelta7d > 180 || repo.updateEvents7d > 38) {
+      towers.push({
+        x: -repo.width * 0.54,
+        z: -repo.depth * 0.34,
+        width: repo.width * 0.28,
+        depth: repo.depth * 0.34,
+        height: repo.height * 0.28,
+      });
+    }
+
+    if (repo.score > 42 || repo.starDelta7d > 320) {
+      towers.push({
+        x: repo.width * 0.6,
+        z: repo.depth * 0.44,
+        width: repo.width * 0.24,
+        depth: repo.depth * 0.3,
+        height: repo.height * 0.22,
+      });
+    }
+
+    return towers;
+  }, [repo.depth, repo.height, repo.score, repo.starDelta7d, repo.updateEvents7d, repo.width]);
+  const compoundBounds = useMemo(
+    () => getCompoundBounds(repo, annexTowers),
+    [annexTowers, repo],
+  );
 
   useEffect(() => {
     document.body.style.cursor = hovered ? "pointer" : "default";
@@ -278,7 +323,7 @@ function Building({
     if (shellRef.current) {
       shellRef.current.position.y = THREE.MathUtils.lerp(
         shellRef.current.position.y,
-        repo.height * 0.37 + 0.2 + (hovered ? 0.18 : 0),
+        repo.height * 0.34 + 0.22 + (hovered ? 0.18 : 0),
         0.08,
       );
     }
@@ -354,7 +399,25 @@ function Building({
           event.stopPropagation();
           onSelect(repo.id);
         }}
-        position={[0, 0.16, 0]}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+        position={[
+          compoundBounds.centerX,
+          compoundBounds.height / 2 + 0.25,
+          compoundBounds.centerZ,
+        ]}
+        renderOrder={0}
+      >
+        <boxGeometry args={[compoundBounds.width, compoundBounds.height, compoundBounds.depth]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+
+      <mesh
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect(repo.id);
+        }}
+        position={[0, 0.22, 0]}
       >
         <boxGeometry args={[repo.lotWidth * 1.04, 0.3, repo.lotDepth * 1.04]} />
         <meshStandardMaterial
@@ -374,8 +437,9 @@ function Building({
         }}
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
+        renderOrder={1}
       >
-        <boxGeometry args={[repo.width, repo.height * 0.74, repo.depth]} />
+        <boxGeometry args={[repo.width, repo.height * 0.68, repo.depth]} />
         <meshStandardMaterial
           color={repo.color}
           emissive={repo.color}
@@ -388,14 +452,84 @@ function Building({
         {(selected || hovered) && <Edges color="#ffffff" scale={1.01} />}
       </mesh>
 
+      {annexTowers.map((tower, index) => (
+        <group key={`${repo.id}-annex-${index}`} position={[tower.x, 0, tower.z]}>
+          <mesh
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect(repo.id);
+            }}
+            onPointerEnter={() => setHovered(true)}
+            onPointerLeave={() => setHovered(false)}
+            position={[0, tower.height / 2 + 0.22, 0]}
+            renderOrder={1}
+          >
+            <boxGeometry args={[tower.width, tower.height, tower.depth]} />
+            <meshStandardMaterial
+              color={repo.color}
+              emissive={repo.color}
+              emissiveIntensity={palette.isNight ? 0.04 : 0.018}
+              metalness={0.1}
+              roughness={0.24}
+              transparent
+              opacity={palette.isNight ? 0.44 : 0.3}
+            />
+            {(selected || hovered) && <Edges color="#ffffff" scale={1.01} />}
+          </mesh>
+
+          <mesh
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect(repo.id);
+            }}
+            position={[0, tower.height / 2 + 0.22, 0]}
+            renderOrder={3}
+          >
+            <boxGeometry
+              args={[tower.width * 0.66, Math.max(tower.height - 2.2, 2), tower.depth * 0.66]}
+            />
+            <meshStandardMaterial
+              color={repo.color}
+              emissive={repo.color}
+              emissiveIntensity={palette.isNight ? 0.16 + repo.lightStrength * 0.84 : 0.05}
+              transparent
+              depthWrite={false}
+              opacity={palette.isNight ? 0.52 : 0.18}
+            />
+          </mesh>
+
+          <mesh
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect(repo.id);
+            }}
+            position={[0, tower.height + 0.58, 0]}
+            renderOrder={4}
+          >
+            <boxGeometry
+              args={[tower.width * 0.8, Math.max(tower.height * 0.04, 0.9), tower.depth * 0.8]}
+            />
+            <meshStandardMaterial
+              color={repo.color}
+              emissive={repo.color}
+              emissiveIntensity={palette.isNight ? 0.24 : 0.1 + repo.lightStrength * 0.36}
+              transparent
+              depthWrite={false}
+              opacity={palette.isNight ? 0.72 : 0.42}
+            />
+          </mesh>
+        </group>
+      ))}
+
       <mesh
         onClick={(event) => {
           event.stopPropagation();
           onSelect(repo.id);
         }}
-        position={[0, repo.height * 0.84, 0]}
+        position={[0, repo.height * 0.81, 0]}
+        renderOrder={2}
       >
-        <boxGeometry args={[repo.width * 0.78, repo.height * 0.26, repo.depth * 0.78]} />
+        <boxGeometry args={[repo.width * 0.76, Math.max(repo.height * 0.15, 3.8), repo.depth * 0.76]} />
         <meshStandardMaterial
           color={repo.color}
           emissive={repo.color}
@@ -413,16 +547,18 @@ function Building({
           event.stopPropagation();
           onSelect(repo.id);
         }}
-        position={[0, repo.height / 2 + 0.25, 0]}
+        position={[0, repo.height * 0.35 + 0.25, 0]}
+        renderOrder={3}
       >
         <boxGeometry
-          args={[repo.width * 0.64, Math.max(repo.height - 3.8, 4), repo.depth * 0.64]}
+          args={[repo.width * 0.62, Math.max(repo.height * 0.58, 4), repo.depth * 0.62]}
         />
         <meshStandardMaterial
           color={repo.color}
           emissive={repo.color}
           emissiveIntensity={0.1}
           transparent
+          depthWrite={false}
           opacity={palette.isNight ? 0.88 : 0.28}
         />
       </mesh>
@@ -433,16 +569,18 @@ function Building({
           event.stopPropagation();
           onSelect(repo.id);
         }}
-        position={[0, repo.height * 0.72, 0]}
+        position={[0, repo.height * 0.91, 0]}
+        renderOrder={4}
       >
         <boxGeometry
-          args={[repo.width * 0.86, Math.max(repo.height * 0.045, 1.5), repo.depth * 0.86]}
+          args={[repo.width * 0.84, Math.max(repo.height * 0.03, 1.2), repo.depth * 0.84]}
         />
         <meshStandardMaterial
           color={repo.color}
           emissive={repo.color}
           emissiveIntensity={0.18}
           transparent
+          depthWrite={false}
           opacity={palette.isNight ? 0.86 : 0.56}
         />
       </mesh>
@@ -453,11 +591,12 @@ function Building({
           event.stopPropagation();
           onSelect(repo.id);
         }}
-        position={[0, repo.height + 0.9, 0]}
+        position={[0, repo.height + 1.1, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
+        renderOrder={5}
       >
         <circleGeometry args={[Math.max(repo.width, repo.depth) * 0.42, 36]} />
-        <meshBasicMaterial color={repo.color} transparent opacity={0.14} />
+        <meshBasicMaterial color={repo.color} depthWrite={false} transparent opacity={0.14} />
       </mesh>
 
       {selected ? (
@@ -542,7 +681,7 @@ function FillerBuilding({
         />
       </mesh>
 
-      <mesh ref={glowRef} position={[0, tower.height / 2, 0]}>
+      <mesh ref={glowRef} position={[0, tower.height / 2, 0]} renderOrder={2}>
         <boxGeometry
           args={[tower.width * 0.72, Math.max(tower.height - 1.6, 2), tower.depth * 0.72]}
         />
@@ -551,19 +690,21 @@ function FillerBuilding({
           emissive={tower.color}
           emissiveIntensity={0.03}
           transparent
+          depthWrite={false}
           opacity={palette.isNight ? 0.28 : 0.09}
         />
       </mesh>
 
-      <mesh ref={crownRef} position={[0, tower.height * 0.78, 0]}>
+      <mesh ref={crownRef} position={[0, tower.height * 0.84, 0]} renderOrder={3}>
         <boxGeometry
-          args={[tower.width * 0.82, Math.max(tower.height * 0.05, 0.9), tower.depth * 0.82]}
+          args={[tower.width * 0.82, Math.max(tower.height * 0.032, 0.9), tower.depth * 0.82]}
         />
         <meshStandardMaterial
           color={tower.color}
           emissive={tower.color}
           emissiveIntensity={0.08}
           transparent
+          depthWrite={false}
           opacity={palette.isNight ? 0.5 : 0.22}
         />
       </mesh>
@@ -579,11 +720,11 @@ function SceneContent({
   onSelect,
   onClearSelection,
 }: SkylineSceneProps) {
-  const fillerTowers = useMemo(() => buildFillerTowers(districts, repos), [districts, repos]);
+  const fillerTowers = useMemo(() => buildFillerTowers(), []);
 
   return (
     <>
-      <fog attach="fog" args={[palette.fog, 180, 1400]} />
+      <fog attach="fog" args={[palette.fog, 260, 2200]} />
       <ambientLight intensity={palette.ambient} color="#ffffff" />
       <hemisphereLight args={["#dbeeff", "#09111d", 0.82 + palette.dayFactor * 0.32]} />
       <directionalLight
@@ -604,66 +745,61 @@ function SceneContent({
           onClearSelection();
         }}
         rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, -0.18, 0]}
+        position={[0, -0.5, 0]}
       >
-        <planeGeometry args={[1180, 1180]} />
+        <planeGeometry args={[2600, 2600]} />
         <meshStandardMaterial color={palette.ground} />
       </mesh>
 
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[0, -0.05, 0]}
+        position={[0, -0.2, 0]}
         size={[1180, 18]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[0, -0.05, -182]}
+        position={[0, -0.2, -182]}
         size={[1180, 14]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[0, -0.05, 182]}
+        position={[0, -0.2, 182]}
         size={[1180, 14]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[-228, -0.05, 0]}
+        position={[-228, -0.2, 0]}
         size={[14, 1180]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[228, -0.05, 0]}
+        position={[228, -0.2, 0]}
         size={[14, 1180]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[0, -0.05, 0]}
+        position={[0, -0.2, 0]}
         size={[18, 1180]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[0, -0.05, 20]}
+        position={[0, -0.2, 20]}
         rotationY={Math.PI / 5.4}
         size={[860, 14]}
       />
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[8, -0.05, 4]}
+        position={[8, -0.2, 4]}
         rotationY={-Math.PI / 4.8}
         size={[760, 12]}
-      />
-
-      <gridHelper
-        args={[1180, 128, palette.districtEdge, palette.districtEdge]}
-        position={[0, 0.02, 0]}
       />
 
       {districts.map((district) => (
@@ -703,11 +839,11 @@ function SceneContent({
 
       <OrbitControls
         enablePan={false}
-        maxDistance={3200}
+        maxDistance={7600}
         maxPolarAngle={Math.PI / 2.08}
         minDistance={18}
         minPolarAngle={Math.PI / 5.8}
-        target={[0, 18, 10]}
+        target={[0, 24, 16]}
       />
     </>
   );
@@ -716,7 +852,7 @@ function SceneContent({
 export function SkylineScene(props: SkylineSceneProps) {
   return (
     <Canvas
-      camera={{ fov: 22, position: [0, 42, 184], far: 5000 }}
+      camera={{ fov: 18, near: 1, position: [0, 88, 364], far: 9000 }}
       gl={{ antialias: true, alpha: true }}
     >
       <SceneContent {...props} />
