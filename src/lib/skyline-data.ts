@@ -100,12 +100,13 @@ type SearchSeed = {
   domain: DomainKey;
   perPage: number;
   query: string;
-  sort: "updated";
+  sort: "updated" | "stars";
 };
 
 const dayMs = 24 * 60 * 60 * 1000;
 const hourMs = 60 * 60 * 1000;
 const liveCacheTtlMs = 12 * 60 * 1000;
+const extraLiveRepoCount = 32;
 
 const districts: DistrictRecord[] = [
   {
@@ -744,42 +745,77 @@ const getLiveToken = () =>
   process.env.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || null;
 
 const buildLiveSearchSeeds = (): SearchSeed[] => {
-  const recentDate = toIsoDate(new Date(Date.now() - 21 * dayMs));
+  const recentDate = toIsoDate(new Date(Date.now() - 60 * dayMs));
 
   return [
     {
       domain: "agents",
-      perPage: 8,
-      query: `agent ai in:name,description created:>=${recentDate} archived:false mirror:false stars:>2`,
+      perPage: 16,
+      query: `agent ai in:name,description created:>=${recentDate} archived:false mirror:false stars:>3`,
+      sort: "updated",
+    },
+    {
+      domain: "agents",
+      perPage: 14,
+      query:
+        `("ai agent" OR "agent framework" OR "multi-agent") in:name,description stars:>20 archived:false mirror:false`,
+      sort: "stars",
+    },
+    {
+      domain: "tooling",
+      perPage: 16,
+      query:
+        `("coding assistant" OR copilot OR "ai coding" OR "code agent") in:name,description created:>=${recentDate} archived:false mirror:false stars:>3`,
       sort: "updated",
     },
     {
       domain: "tooling",
-      perPage: 8,
+      perPage: 14,
       query:
-        `("coding assistant" OR copilot OR "ai coding") in:name,description created:>=${recentDate} archived:false mirror:false stars:>2`,
+        `("coding assistant" OR "ai coding" OR copilot OR "code agent") in:name,description stars:>20 archived:false mirror:false`,
+      sort: "stars",
+    },
+    {
+      domain: "automation",
+      perPage: 16,
+      query:
+        `("browser automation" OR "computer use" OR "browser agent" OR "web agent") in:name,description created:>=${recentDate} archived:false mirror:false stars:>3`,
       sort: "updated",
     },
     {
       domain: "automation",
-      perPage: 8,
+      perPage: 14,
       query:
-        `("browser automation" OR "computer use" OR "browser agent") in:name,description created:>=${recentDate} archived:false mirror:false stars:>2`,
+        `("browser automation" OR "computer use" OR "browser agent" OR "web agent") in:name,description stars:>10 archived:false mirror:false`,
+      sort: "stars",
+    },
+    {
+      domain: "inference",
+      perPage: 16,
+      query:
+        `("inference engine" OR "llm serving" OR "inference server" OR "llm runtime") in:name,description created:>=${recentDate} archived:false mirror:false stars:>3`,
       sort: "updated",
     },
     {
       domain: "inference",
-      perPage: 8,
+      perPage: 14,
       query:
-        `("inference engine" OR "llm serving" OR "inference server") in:name,description created:>=${recentDate} archived:false mirror:false stars:>2`,
+        `("llm serving" OR "inference server" OR "inference runtime" OR "inference engine") in:name,description stars:>20 archived:false mirror:false`,
+      sort: "stars",
+    },
+    {
+      domain: "memory",
+      perPage: 16,
+      query:
+        `("agent memory" OR rag OR "vector database" OR "knowledge base") in:name,description created:>=${recentDate} archived:false mirror:false stars:>3`,
       sort: "updated",
     },
     {
       domain: "memory",
-      perPage: 8,
+      perPage: 14,
       query:
-        `("agent memory" OR rag OR "vector database") in:name,description created:>=${recentDate} archived:false mirror:false stars:>2`,
-      sort: "updated",
+        `("agent memory" OR rag OR "vector database" OR "knowledge base") in:name,description stars:>20 archived:false mirror:false`,
+      sort: "stars",
     },
   ];
 };
@@ -1003,7 +1039,7 @@ const getLiveSkylineSnapshot = async () => {
         }
       }
 
-      for (const item of pickBalancedCandidates(searchCandidates, 2, 10)) {
+      for (const item of pickBalancedCandidates(searchCandidates, 7, extraLiveRepoCount)) {
         deduped.set(item.repo.full_name.toLowerCase(), item);
       }
 
