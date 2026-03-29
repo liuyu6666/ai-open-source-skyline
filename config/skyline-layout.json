@@ -49,5 +49,9 @@
     "mainRoadWidth": 22,
     "roadWidth": 14,
     "groundPadding": 240
+  },
+  "tower": {
+    "minHeight": 4,
+    "maxHeight": 220
   }
 }

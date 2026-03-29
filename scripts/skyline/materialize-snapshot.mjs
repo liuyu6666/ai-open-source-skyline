@@ -2,6 +2,7 @@ import {
   buildLocalizedDescriptions,
   clamp,
   classifyDomain,
+  computeTowerHeight,
   createLotOffsets,
   daysSince,
   ensureSchema,
@@ -262,6 +263,7 @@ function createLayout(repos, districts) {
   }
 
   const maxUpdates = Math.max(1, ...repos.map((repo) => repo.updateEvents7d));
+  const maxStars = Math.max(1, ...repos.map((repo) => repo.totalStars));
 
   const positioned = repos.map((repo) => {
     const district = districtIndex.get(repo.domain);
@@ -273,7 +275,7 @@ function createLayout(repos, districts) {
 
     const width = clamp(8.9 + Math.log10(repo.totalStars + 10) * 2.2, 9.8, 20.4);
     const depth = clamp(8.4 + Math.sqrt(repo.updateEvents30d + 1) * 0.42, 9.4, 18.8);
-    const height = clamp(20 + repo.score * 0.92, 24, 108);
+    const height = computeTowerHeight(repo.totalStars, maxStars);
 
     return {
       ...repo,
