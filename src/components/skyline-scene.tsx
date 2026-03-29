@@ -530,10 +530,12 @@ function SceneContent({
   onClearSelection,
 }: SkylineSceneProps) {
   const fillerTowers = useMemo(() => buildFillerTowers(), []);
+  const avenueXs = [-210, -126, -42, 42, 126, 210];
+  const crossStreetZs = [-178, -116, -54, 8, 70, 132, 194];
 
   return (
     <>
-      <fog attach="fog" args={[palette.fog, 260, 2200]} />
+      <fog attach="fog" args={[palette.fog, 320, 2500]} />
       <ambientLight intensity={palette.ambient} color="#ffffff" />
       <hemisphereLight args={["#dbeeff", "#09111d", 0.82 + palette.dayFactor * 0.32]} />
       <directionalLight
@@ -564,52 +566,28 @@ function SceneContent({
         color={palette.street}
         onClearSelection={onClearSelection}
         position={[0, -0.2, 0]}
-        size={[1180, 18]}
+        size={[1320, 20]}
       />
-      <RoadStrip
-        color={palette.street}
-        onClearSelection={onClearSelection}
-        position={[0, -0.2, -182]}
-        size={[1180, 14]}
-      />
-      <RoadStrip
-        color={palette.street}
-        onClearSelection={onClearSelection}
-        position={[0, -0.2, 182]}
-        size={[1180, 14]}
-      />
-      <RoadStrip
-        color={palette.street}
-        onClearSelection={onClearSelection}
-        position={[-228, -0.2, 0]}
-        size={[14, 1180]}
-      />
-      <RoadStrip
-        color={palette.street}
-        onClearSelection={onClearSelection}
-        position={[228, -0.2, 0]}
-        size={[14, 1180]}
-      />
-      <RoadStrip
-        color={palette.street}
-        onClearSelection={onClearSelection}
-        position={[0, -0.2, 0]}
-        size={[18, 1180]}
-      />
-      <RoadStrip
-        color={palette.street}
-        onClearSelection={onClearSelection}
-        position={[0, -0.2, 20]}
-        rotationY={Math.PI / 5.4}
-        size={[860, 14]}
-      />
-      <RoadStrip
-        color={palette.street}
-        onClearSelection={onClearSelection}
-        position={[8, -0.2, 4]}
-        rotationY={-Math.PI / 4.8}
-        size={[760, 12]}
-      />
+
+      {crossStreetZs.map((z) => (
+        <RoadStrip
+          key={`street-${z}`}
+          color={palette.street}
+          onClearSelection={onClearSelection}
+          position={[0, -0.2, z]}
+          size={[1320, Math.abs(z) < 20 ? 18 : 13]}
+        />
+      ))}
+
+      {avenueXs.map((x) => (
+        <RoadStrip
+          key={`avenue-${x}`}
+          color={palette.street}
+          onClearSelection={onClearSelection}
+          position={[x, -0.2, 12]}
+          size={[Math.abs(x) < 60 ? 18 : 14, 1320]}
+        />
+      ))}
 
       {districts.map((district) => (
         <DistrictPlate
@@ -652,7 +630,7 @@ function SceneContent({
         maxPolarAngle={Math.PI / 2.08}
         minDistance={28}
         minPolarAngle={Math.PI / 5.8}
-        target={[0, 28, 18]}
+        target={[0, 30, 52]}
       />
     </>
   );
@@ -661,7 +639,7 @@ function SceneContent({
 export function SkylineScene(props: SkylineSceneProps) {
   return (
     <Canvas
-      camera={{ fov: 18, near: 1, position: [0, 120, 460], far: 12000 }}
+      camera={{ fov: 18, near: 1, position: [0, 152, 612], far: 12000 }}
       gl={{ antialias: true, alpha: true }}
     >
       <SceneContent {...props} />

@@ -13,32 +13,32 @@ export const skylineDistricts = [
   {
     id: "agents",
     color: "#7dd3fc",
-    center: { x: -42, z: -24 },
-    size: { width: 112, depth: 86 },
+    center: { x: -114, z: -42 },
+    size: { width: 188, depth: 138 },
   },
   {
     id: "tooling",
     color: "#f9a8d4",
-    center: { x: 44, z: -16 },
-    size: { width: 108, depth: 84 },
+    center: { x: 112, z: -36 },
+    size: { width: 184, depth: 136 },
   },
   {
     id: "automation",
     color: "#c4b5fd",
-    center: { x: 4, z: 14 },
-    size: { width: 132, depth: 102 },
+    center: { x: 0, z: 32 },
+    size: { width: 236, depth: 178 },
   },
   {
     id: "inference",
     color: "#fcd34d",
-    center: { x: -34, z: 62 },
-    size: { width: 104, depth: 82 },
+    center: { x: -90, z: 146 },
+    size: { width: 172, depth: 132 },
   },
   {
     id: "memory",
     color: "#86efac",
-    center: { x: 40, z: 66 },
-    size: { width: 104, depth: 82 },
+    center: { x: 98, z: 150 },
+    size: { width: 176, depth: 132 },
   },
 ];
 
@@ -323,60 +323,75 @@ export function hashValue(seed) {
 }
 
 export function createLotOffsets(district, count) {
-  const offsets = [];
-  const downtownCore = { x: 6, z: 14 };
-  const driftX = (downtownCore.x - district.center.x) * 0.12;
-  const driftZ = (downtownCore.z - district.center.z) * 0.12;
-  const baseAngle = Math.atan2(
-    district.center.z - downtownCore.z,
-    district.center.x - downtownCore.x,
+  const columns = Math.max(
+    4,
+    Math.round(Math.sqrt((count * district.size.width) / district.size.depth) * 0.94),
   );
+  const rows = Math.max(3, Math.ceil(count / columns));
+  const avenueEvery = 4;
+  const streetEvery = 5;
+  const avenueGap = clamp(district.size.width * 0.045, 5.4, 8.2);
+  const streetGap = clamp(district.size.depth * 0.04, 4.8, 7.2);
+  const avenueCount = Math.floor((columns - 1) / avenueEvery);
+  const streetCount = Math.floor((rows - 1) / streetEvery);
+  const widthBudget = district.size.width * 0.82 - avenueCount * avenueGap;
+  const depthBudget = district.size.depth * 0.82 - streetCount * streetGap;
+  const stepX = columns > 1 ? widthBudget / (columns - 1) : 0;
+  const stepZ = rows > 1 ? depthBudget / (rows - 1) : 0;
+  const xPositions = [];
+  const zPositions = [];
+  let cursorX = 0;
+  let cursorZ = 0;
 
-  for (let index = 0; index < count; index += 1) {
-    if (index === 0) {
-      offsets.push({ x: 0, z: 0 });
-      continue;
+  for (let column = 0; column < columns; column += 1) {
+    xPositions.push(cursorX);
+    cursorX += stepX;
+
+    if ((column + 1) % avenueEvery === 0 && column < columns - 1) {
+      cursorX += avenueGap;
     }
-
-    const ring = Math.ceil(Math.sqrt(index));
-    const ringStart = (ring - 1) * (ring - 1) + 1;
-    const slot = index - ringStart;
-    const slotCount = Math.max(5, ring * 6);
-    const seed = count * 31 + index * 17 + district.center.x * 0.4;
-    const angle =
-      baseAngle +
-      (slot / slotCount) * Math.PI * 1.88 +
-      (hashValue(seed) - 0.5) * 0.38;
-    const radiusX = Math.min(
-      district.size.width * 0.46,
-      9 + ring * 7.2 + hashValue(seed + 5.1) * 3.6,
-    );
-    const radiusZ = Math.min(
-      district.size.depth * 0.46,
-      8 + ring * 6.8 + hashValue(seed + 9.7) * 3,
-    );
-    const spreadX =
-      Math.cos(angle) * radiusX +
-      driftX * ring +
-      (hashValue(seed + 2.2) - 0.5) * 2.8;
-    const spreadZ =
-      Math.sin(angle) * radiusZ +
-      driftZ * ring +
-      (hashValue(seed + 6.4) - 0.5) * 2.5;
-
-    offsets.push({
-      x: Number(spreadX.toFixed(1)),
-      z: Number(spreadZ.toFixed(1)),
-    });
   }
 
-  offsets.sort((left, right) => {
-    const leftWeight = Math.hypot(left.x - driftX * 2, left.z - driftZ * 2);
-    const rightWeight = Math.hypot(right.x - driftX * 2, right.z - driftZ * 2);
-    return leftWeight - rightWeight;
-  });
+  for (let row = 0; row < rows; row += 1) {
+    zPositions.push(cursorZ);
+    cursorZ += stepZ;
 
-  return offsets.slice(0, count);
+    if ((row + 1) % streetEvery === 0 && row < rows - 1) {
+      cursorZ += streetGap;
+    }
+  }
+
+  const xMidpoint = (xPositions[0] + xPositions.at(-1)) / 2;
+  const zMidpoint = (zPositions[0] + zPositions.at(-1)) / 2;
+  const coreColumn = (columns - 1) / 2;
+  const coreRow = Math.max(1, (rows - 1) * 0.42);
+  const slots = [];
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const slotIndex = row * columns + column;
+      const seed = count * 19 + slotIndex * 7.3 + district.center.x * 0.17;
+      const jitterX = (hashValue(seed + 0.9) - 0.5) * Math.min(stepX * 0.12, 1.9);
+      const jitterZ = (hashValue(seed + 2.3) - 0.5) * Math.min(stepZ * 0.12, 1.9);
+      const centeredX = xPositions[column] - xMidpoint + jitterX;
+      const centeredZ = zPositions[row] - zMidpoint + jitterZ;
+      const avenueBias =
+        Math.abs((column % avenueEvery) - (avenueEvery - 1) / 2) < 0.65 ? -0.2 : 0;
+      const desirability =
+        Math.hypot((column - coreColumn) * 1.08, (row - coreRow) * 0.92) + avenueBias;
+
+      slots.push({
+        desirability,
+        x: Number(centeredX.toFixed(1)),
+        z: Number(centeredZ.toFixed(1)),
+      });
+    }
+  }
+
+  return slots
+    .sort((left, right) => left.desirability - right.desirability)
+    .slice(0, count)
+    .map(({ x, z }) => ({ x, z }));
 }
 
 export function daysSince(isoString) {

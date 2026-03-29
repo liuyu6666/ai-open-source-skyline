@@ -17,7 +17,32 @@ import {
   writeSnapshotFile,
 } from "./shared.mjs";
 
-const districtIndex = new Map(skylineDistricts.map((district) => [district.id, district]));
+const buildDistrictsForSnapshot = (repos) => {
+  const counts = repos.reduce((result, repo) => {
+    result[repo.domain] = (result[repo.domain] ?? 0) + 1;
+    return result;
+  }, {});
+
+  return skylineDistricts.map((district) => {
+    const count = counts[district.id] ?? 0;
+    const scale = clamp(Math.sqrt(Math.max(count, 1) / 45), 0.92, 1.82);
+    const widthScale = district.id === "agents" ? scale * 1.12 : scale;
+    const depthScale = district.id === "agents" ? Math.max(1.08, scale * 0.9) : Math.max(0.94, scale);
+    const centerScale = scale > 1 ? 1 + (scale - 1) * 0.18 : 1;
+
+    return {
+      ...district,
+      center: {
+        x: Number((district.center.x * centerScale).toFixed(1)),
+        z: district.center.z,
+      },
+      size: {
+        width: Number((district.size.width * widthScale).toFixed(1)),
+        depth: Number((district.size.depth * depthScale).toFixed(1)),
+      },
+    };
+  });
+};
 
 function parseArgs(argv = process.argv.slice(2)) {
   const parsed = {};
@@ -190,7 +215,8 @@ function toRepoRecord(row) {
   };
 }
 
-function createLayout(repos) {
+function createLayout(repos, districts) {
+  const districtIndex = new Map(districts.map((district) => [district.id, district]));
   const grouped = new Map();
 
   for (const repo of repos) {
@@ -221,7 +247,7 @@ function createLayout(repos) {
 
   const maxUpdates = Math.max(1, ...repos.map((repo) => repo.updateEvents7d));
 
-  return repos.map((repo) => {
+  const positioned = repos.map((repo) => {
     const district = districtIndex.get(repo.domain);
     const position = positions.get(repo.id);
 
@@ -229,9 +255,9 @@ function createLayout(repos) {
       throw new Error(`Missing skyline layout for ${repo.fullName}`);
     }
 
-    const width = clamp(5.4 + Math.log10(repo.totalStars + 10) * 1.35, 5.6, 11.8);
-    const depth = clamp(5.6 + Math.sqrt(repo.updateEvents30d + 1) * 0.22, 5.8, 11.6);
-    const height = clamp(18 + repo.score * 0.94, 20, 98);
+    const width = clamp(8.9 + Math.log10(repo.totalStars + 10) * 2.2, 9.8, 20.4);
+    const depth = clamp(8.4 + Math.sqrt(repo.updateEvents30d + 1) * 0.42, 9.4, 18.8);
+    const height = clamp(20 + repo.score * 0.92, 24, 108);
 
     return {
       ...repo,
@@ -239,14 +265,99 @@ function createLayout(repos) {
       depth: Number(depth.toFixed(1)),
       height: Number(height.toFixed(1)),
       lightStrength: Number((repo.updateEvents7d / maxUpdates).toFixed(2)),
-      lotDepth: Number((depth + 3.8).toFixed(1)),
-      lotWidth: Number((width + 3.8).toFixed(1)),
+      lotDepth: Number((depth + 8.4).toFixed(1)),
+      lotWidth: Number((width + 8.2).toFixed(1)),
       score: Number(repo.score.toFixed(1)),
       width: Number(width.toFixed(1)),
       x: position.x,
       z: position.z,
     };
   });
+
+  for (let iteration = 0; iteration < 18; iteration += 1) {
+    let moved = false;
+
+    for (let leftIndex = 0; leftIndex < positioned.length; leftIndex += 1) {
+      const left = positioned[leftIndex];
+      const leftDistrict = districtIndex.get(left.domain);
+
+      if (!leftDistrict) {
+        continue;
+      }
+
+      for (let rightIndex = leftIndex + 1; rightIndex < positioned.length; rightIndex += 1) {
+        const right = positioned[rightIndex];
+        const rightDistrict = districtIndex.get(right.domain);
+
+        if (!rightDistrict) {
+          continue;
+        }
+
+        const dx = right.x - left.x;
+        const dz = right.z - left.z;
+        const distance = Math.hypot(dx, dz) || 0.001;
+        const minimumDistance = Math.max(
+          (Math.max(left.lotWidth, left.lotDepth) + Math.max(right.lotWidth, right.lotDepth)) *
+            0.5,
+          15.5,
+        );
+
+        if (distance >= minimumDistance) {
+          continue;
+        }
+
+        const push = (minimumDistance - distance) * 0.5;
+        let normalX = dx / distance;
+        let normalZ = dz / distance;
+
+        if (Math.abs(dx) < 0.001 && Math.abs(dz) < 0.001) {
+          const angle = (leftIndex * 0.73 + rightIndex * 0.41) % (Math.PI * 2);
+          normalX = Math.cos(angle);
+          normalZ = Math.sin(angle);
+        }
+        const leftPaddingX = leftDistrict.size.width * 0.42;
+        const leftPaddingZ = leftDistrict.size.depth * 0.42;
+        const rightPaddingX = rightDistrict.size.width * 0.42;
+        const rightPaddingZ = rightDistrict.size.depth * 0.42;
+
+        left.x = Number(
+          clamp(
+            left.x - normalX * push,
+            leftDistrict.center.x - leftPaddingX,
+            leftDistrict.center.x + leftPaddingX,
+          ).toFixed(1),
+        );
+        left.z = Number(
+          clamp(
+            left.z - normalZ * push,
+            leftDistrict.center.z - leftPaddingZ,
+            leftDistrict.center.z + leftPaddingZ,
+          ).toFixed(1),
+        );
+        right.x = Number(
+          clamp(
+            right.x + normalX * push,
+            rightDistrict.center.x - rightPaddingX,
+            rightDistrict.center.x + rightPaddingX,
+          ).toFixed(1),
+        );
+        right.z = Number(
+          clamp(
+            right.z + normalZ * push,
+            rightDistrict.center.z - rightPaddingZ,
+            rightDistrict.center.z + rightPaddingZ,
+          ).toFixed(1),
+        );
+        moved = true;
+      }
+    }
+
+    if (!moved) {
+      break;
+    }
+  }
+
+  return positioned;
 }
 
 export function materializeSnapshot({
@@ -278,10 +389,11 @@ export function materializeSnapshot({
       .map(toRepoRecord)
       .sort((left, right) => right.score - left.score)
       .slice(0, limit);
-    const repos = createLayout(selected);
+    const districts = buildDistrictsForSnapshot(selected);
+    const repos = createLayout(selected, districts);
     const snapshot = {
       demoMode: false,
-      districts: skylineDistricts,
+      districts,
       generatedAt: new Date().toISOString(),
       repos,
       stats: {
