@@ -320,6 +320,47 @@ function clearActorRows(database, metricDate) {
     .run(metricDate);
 }
 
+function pruneDailyNoise(
+  database,
+  metricDate,
+  {
+    minDailyEvents = 6,
+    minDailyContributors = 3,
+  } = {},
+) {
+  const removedMetrics = database
+    .prepare(
+      `
+        DELETE FROM skyline_repo_daily_metrics
+        WHERE metric_date = ?
+          AND watch_events = 0
+          AND total_events < ?
+          AND contributors < ?
+          AND created_repo = 0
+      `,
+    )
+    .run(metricDate, minDailyEvents, minDailyContributors).changes;
+
+  const removedRepos = database
+    .prepare(
+      `
+        DELETE FROM skyline_repos
+        WHERE full_name NOT IN (
+          SELECT DISTINCT repo_full_name
+          FROM skyline_repo_daily_metrics
+        )
+      `,
+    )
+    .run().changes;
+
+  database.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+
+  return {
+    removedMetrics,
+    removedRepos,
+  };
+}
+
 async function processHour(database, metricDate, hour) {
   const bucket = createHourlyBucket(metricDate);
 
@@ -343,6 +384,8 @@ export async function backfillGhArchive({
   days = 30,
   endDate,
   hourLimit = null,
+  minDailyContributors = 3,
+  minDailyEvents = 6,
 } = {}) {
   loadLocalEnv();
 
@@ -388,7 +431,11 @@ export async function backfillGhArchive({
 
       refreshContributorCounts(database, [metricDate]);
       clearActorRows(database, metricDate);
-      console.log(`Completed ${metricDate}`, daySummary);
+      const pruned = pruneDailyNoise(database, metricDate, {
+        minDailyContributors,
+        minDailyEvents,
+      });
+      console.log(`Completed ${metricDate}`, { ...daySummary, ...pruned });
     }
     setIngestionState(database, "gharchive_backfill", {
       completedAt: new Date().toISOString(),
@@ -397,6 +444,10 @@ export async function backfillGhArchive({
       metricDates,
       startedAt,
       summary,
+      thresholds: {
+        minDailyContributors,
+        minDailyEvents,
+      },
     });
 
     return summary;
@@ -415,6 +466,8 @@ if (isMainModule(import.meta)) {
     days,
     endDate: args["end-date"],
     hourLimit,
+    minDailyContributors: Number(args["min-daily-contributors"] ?? 3),
+    minDailyEvents: Number(args["min-daily-events"] ?? 6),
   })
     .then((summary) => {
       console.log("Completed GH Archive backfill.");

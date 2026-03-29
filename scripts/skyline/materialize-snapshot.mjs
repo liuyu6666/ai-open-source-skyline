@@ -13,6 +13,7 @@ import {
   scoreRepo,
   setIngestionState,
   skylineDistricts,
+  skylineGrid,
   upsertSnapshot,
   writeSnapshotFile,
 } from "./shared.mjs";
@@ -25,10 +26,25 @@ const buildDistrictsForSnapshot = (repos) => {
 
   return skylineDistricts.map((district) => {
     const count = counts[district.id] ?? 0;
-    const scale = clamp(Math.sqrt(Math.max(count, 1) / 45), 0.92, 1.82);
-    const widthScale = district.id === "agents" ? scale * 1.12 : scale;
-    const depthScale = district.id === "agents" ? Math.max(1.08, scale * 0.9) : Math.max(0.94, scale);
-    const centerScale = scale > 1 ? 1 + (scale - 1) * 0.18 : 1;
+    const columns = Math.max(
+      4,
+      Math.round(Math.sqrt((Math.max(count, 1) * district.size.width) / district.size.depth) * 0.94),
+    );
+    const rows = Math.max(3, Math.ceil(Math.max(count, 1) / columns));
+    const avenueCount = Math.floor((columns - 1) / skylineGrid.avenueEvery);
+    const streetCount = Math.floor((rows - 1) / skylineGrid.streetEvery);
+    const requiredWidth =
+      (columns - 1) * skylineGrid.pitchX +
+      avenueCount * skylineGrid.avenueGap +
+      skylineGrid.marginX * 2;
+    const requiredDepth =
+      (rows - 1) * skylineGrid.pitchZ +
+      streetCount * skylineGrid.streetGap +
+      skylineGrid.marginZ * 2;
+    const width = Math.max(district.size.width, requiredWidth);
+    const depth = Math.max(district.size.depth, requiredDepth);
+    const expansionRatio = Math.max(width / district.size.width, depth / district.size.depth);
+    const centerScale = expansionRatio > 1 ? 1 + (expansionRatio - 1) * 0.18 : 1;
 
     return {
       ...district,
@@ -37,8 +53,8 @@ const buildDistrictsForSnapshot = (repos) => {
         z: district.center.z,
       },
       size: {
-        width: Number((district.size.width * widthScale).toFixed(1)),
-        depth: Number((district.size.depth * depthScale).toFixed(1)),
+        width: Number(width.toFixed(1)),
+        depth: Number(depth.toFixed(1)),
       },
     };
   });

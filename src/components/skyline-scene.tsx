@@ -5,6 +5,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
+import skylineLayoutConfig from "../../config/skyline-layout.json";
 import type { DistrictRecord, RepoRecord } from "@/lib/skyline-data";
 
 type LabeledDistrict = DistrictRecord & {
@@ -31,6 +32,10 @@ type SkylineSceneProps = {
   onClearSelection: () => void;
 };
 
+type SceneContentProps = SkylineSceneProps & {
+  scene: SceneMetrics;
+};
+
 type FillerTower = {
   key: string;
   color: string;
@@ -42,26 +47,102 @@ type FillerTower = {
   lightStrength: number;
 };
 
+type SceneMetrics = {
+  avenueXs: number[];
+  centerX: number;
+  centerZ: number;
+  crossStreetZs: number[];
+  extent: number;
+  groundWidth: number;
+  groundDepth: number;
+  maxX: number;
+  maxZ: number;
+  minX: number;
+  minZ: number;
+};
+
+const sceneConfig = skylineLayoutConfig.scene;
+
 const hashValue = (seed: number) => {
   const value = Math.sin(seed) * 43758.5453123;
 
   return value - Math.floor(value);
 };
 
-function buildFillerTowers(): FillerTower[] {
-  const filler: FillerTower[] = [];
+function buildAxisLines(min: number, max: number, spacing: number) {
+  const start = Math.floor(min / spacing) * spacing;
+  const values: number[] = [];
 
-  for (let index = 0; index < 34; index += 1) {
+  for (let value = start; value <= max + spacing * 0.5; value += spacing) {
+    values.push(Number(value.toFixed(1)));
+  }
+
+  return values;
+}
+
+function computeSceneMetrics(districts: LabeledDistrict[], repos: RepoRecord[]): SceneMetrics {
+  const districtBounds = districts.flatMap((district) => [
+    district.center.x - district.size.width * 0.5,
+    district.center.x + district.size.width * 0.5,
+    district.center.z - district.size.depth * 0.5,
+    district.center.z + district.size.depth * 0.5,
+  ]);
+  const repoBounds = repos.flatMap((repo) => [
+    repo.x - repo.lotWidth * 0.56,
+    repo.x + repo.lotWidth * 0.56,
+    repo.z - repo.lotDepth * 0.56,
+    repo.z + repo.lotDepth * 0.56,
+  ]);
+  const xs = [...districtBounds.filter((_, index) => index % 4 < 2), ...repoBounds.filter((_, index) => index % 4 < 2)];
+  const zs = [...districtBounds.filter((_, index) => index % 4 >= 2), ...repoBounds.filter((_, index) => index % 4 >= 2)];
+  const rawMinX = Math.min(...xs);
+  const rawMaxX = Math.max(...xs);
+  const rawMinZ = Math.min(...zs);
+  const rawMaxZ = Math.max(...zs);
+  const minX = rawMinX - sceneConfig.districtPadding;
+  const maxX = rawMaxX + sceneConfig.districtPadding;
+  const minZ = rawMinZ - sceneConfig.districtPadding;
+  const maxZ = rawMaxZ + sceneConfig.districtPadding;
+  const centerX = (minX + maxX) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+  const spanX = maxX - minX;
+  const spanZ = maxZ - minZ;
+  const extent = Math.max(spanX, spanZ);
+
+  return {
+    avenueXs: buildAxisLines(minX, maxX, sceneConfig.avenueSpacing),
+    centerX: Number(centerX.toFixed(1)),
+    centerZ: Number(centerZ.toFixed(1)),
+    crossStreetZs: buildAxisLines(minZ, maxZ, sceneConfig.streetSpacing),
+    extent: Number(extent.toFixed(1)),
+    groundDepth: Number((spanZ + sceneConfig.groundPadding * 2).toFixed(1)),
+    groundWidth: Number((spanX + sceneConfig.groundPadding * 2).toFixed(1)),
+    maxX: Number(maxX.toFixed(1)),
+    maxZ: Number(maxZ.toFixed(1)),
+    minX: Number(minX.toFixed(1)),
+    minZ: Number(minZ.toFixed(1)),
+  };
+}
+
+function buildFillerTowers(scene: SceneMetrics): FillerTower[] {
+  const filler: FillerTower[] = [];
+  const beltLeftX = scene.minX - sceneConfig.fillerGap;
+  const beltRightX = scene.maxX + sceneConfig.fillerGap;
+  const beltBackZ = scene.minZ - sceneConfig.fillerGap;
+  const beltFrontZ = scene.maxZ + sceneConfig.fillerGap;
+  const zCount = Math.max(14, Math.floor((scene.maxZ - scene.minZ) / 18));
+  const xCount = Math.max(14, Math.floor((scene.maxX - scene.minX) / 18));
+
+  for (let index = 0; index < zCount; index += 1) {
     const leftSeed = 500 + index * 3.1;
     const rightSeed = 700 + index * 2.7;
-    const backSeed = 900 + index * 2.3;
-    const frontSeed = 1100 + index * 2.1;
+    const zStep = (scene.maxZ - scene.minZ) / Math.max(zCount - 1, 1);
 
     filler.push({
       key: `belt-left-${index}`,
       color: "#7faef8",
-      x: Number((-214 + hashValue(leftSeed) * 28).toFixed(1)),
-      z: Number((-182 + index * 11.6 + hashValue(leftSeed + 1.5) * 6).toFixed(1)),
+      x: Number((beltLeftX - hashValue(leftSeed) * 22).toFixed(1)),
+      z: Number((scene.minZ + index * zStep + (hashValue(leftSeed + 1.5) - 0.5) * 8).toFixed(1)),
       width: Number((5.8 + hashValue(leftSeed + 2.6) * 6.4).toFixed(1)),
       depth: Number((5.4 + hashValue(leftSeed + 3.4) * 6.2).toFixed(1)),
       height: Number((22 + hashValue(leftSeed + 4.8) * 62).toFixed(1)),
@@ -70,18 +151,25 @@ function buildFillerTowers(): FillerTower[] {
     filler.push({
       key: `belt-right-${index}`,
       color: "#9be4c7",
-      x: Number((214 - hashValue(rightSeed) * 28).toFixed(1)),
-      z: Number((-182 + index * 11.4 + hashValue(rightSeed + 1.6) * 6).toFixed(1)),
+      x: Number((beltRightX + hashValue(rightSeed) * 22).toFixed(1)),
+      z: Number((scene.minZ + index * zStep + (hashValue(rightSeed + 1.6) - 0.5) * 8).toFixed(1)),
       width: Number((5.8 + hashValue(rightSeed + 2.3) * 6.6).toFixed(1)),
       depth: Number((5.2 + hashValue(rightSeed + 3.2) * 6.2).toFixed(1)),
       height: Number((22 + hashValue(rightSeed + 4.7) * 64).toFixed(1)),
       lightStrength: Number((0.14 + hashValue(rightSeed + 5.6) * 0.52).toFixed(2)),
     });
+  }
+
+  for (let index = 0; index < xCount; index += 1) {
+    const backSeed = 900 + index * 2.3;
+    const frontSeed = 1100 + index * 2.1;
+    const xStep = (scene.maxX - scene.minX) / Math.max(xCount - 1, 1);
+
     filler.push({
       key: `belt-back-${index}`,
       color: "#8b9cff",
-      x: Number((-192 + index * 11.8 + hashValue(backSeed + 0.8) * 6).toFixed(1)),
-      z: Number((-222 + hashValue(backSeed + 1.7) * 18).toFixed(1)),
+      x: Number((scene.minX + index * xStep + (hashValue(backSeed + 0.8) - 0.5) * 8).toFixed(1)),
+      z: Number((beltBackZ - hashValue(backSeed + 1.7) * 18).toFixed(1)),
       width: Number((5.4 + hashValue(backSeed + 2.8) * 5.8).toFixed(1)),
       depth: Number((5.4 + hashValue(backSeed + 3.9) * 5.8).toFixed(1)),
       height: Number((18 + hashValue(backSeed + 4.5) * 48).toFixed(1)),
@@ -90,8 +178,8 @@ function buildFillerTowers(): FillerTower[] {
     filler.push({
       key: `belt-front-${index}`,
       color: "#c9b46a",
-      x: Number((-192 + index * 11.8 + hashValue(frontSeed + 0.9) * 6).toFixed(1)),
-      z: Number((222 - hashValue(frontSeed + 1.8) * 18).toFixed(1)),
+      x: Number((scene.minX + index * xStep + (hashValue(frontSeed + 0.9) - 0.5) * 8).toFixed(1)),
+      z: Number((beltFrontZ + hashValue(frontSeed + 1.8) * 18).toFixed(1)),
       width: Number((5.2 + hashValue(frontSeed + 2.7) * 5.4).toFixed(1)),
       depth: Number((5.2 + hashValue(frontSeed + 3.7) * 5.4).toFixed(1)),
       height: Number((18 + hashValue(frontSeed + 4.6) * 40).toFixed(1)),
@@ -528,14 +616,13 @@ function SceneContent({
   selectedId,
   onSelect,
   onClearSelection,
-}: SkylineSceneProps) {
-  const fillerTowers = useMemo(() => buildFillerTowers(), []);
-  const avenueXs = [-210, -126, -42, 42, 126, 210];
-  const crossStreetZs = [-178, -116, -54, 8, 70, 132, 194];
+  scene,
+}: SceneContentProps) {
+  const fillerTowers = useMemo(() => buildFillerTowers(scene), [scene]);
 
   return (
     <>
-      <fog attach="fog" args={[palette.fog, 320, 2500]} />
+      <fog attach="fog" args={[palette.fog, scene.extent * 0.38, scene.extent * 2.9]} />
       <ambientLight intensity={palette.ambient} color="#ffffff" />
       <hemisphereLight args={["#dbeeff", "#09111d", 0.82 + palette.dayFactor * 0.32]} />
       <directionalLight
@@ -556,36 +643,46 @@ function SceneContent({
           onClearSelection();
         }}
         rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, -0.5, 0]}
+        position={[scene.centerX, -0.5, scene.centerZ]}
       >
-        <planeGeometry args={[2600, 2600]} />
+        <planeGeometry args={[scene.groundWidth, scene.groundDepth]} />
         <meshStandardMaterial color={palette.ground} />
       </mesh>
 
       <RoadStrip
         color={palette.street}
         onClearSelection={onClearSelection}
-        position={[0, -0.2, 0]}
-        size={[1320, 20]}
+        position={[scene.centerX, -0.2, scene.centerZ]}
+        size={[scene.groundWidth * 0.72, sceneConfig.mainRoadWidth]}
       />
 
-      {crossStreetZs.map((z) => (
+      {scene.crossStreetZs.map((z) => (
         <RoadStrip
           key={`street-${z}`}
           color={palette.street}
           onClearSelection={onClearSelection}
-          position={[0, -0.2, z]}
-          size={[1320, Math.abs(z) < 20 ? 18 : 13]}
+          position={[scene.centerX, -0.2, z]}
+          size={[
+            scene.groundWidth * 0.72,
+            Math.abs(z - scene.centerZ) < sceneConfig.streetSpacing * 0.55
+              ? sceneConfig.mainRoadWidth
+              : sceneConfig.roadWidth,
+          ]}
         />
       ))}
 
-      {avenueXs.map((x) => (
+      {scene.avenueXs.map((x) => (
         <RoadStrip
           key={`avenue-${x}`}
           color={palette.street}
           onClearSelection={onClearSelection}
-          position={[x, -0.2, 12]}
-          size={[Math.abs(x) < 60 ? 18 : 14, 1320]}
+          position={[x, -0.2, scene.centerZ]}
+          size={[
+            Math.abs(x - scene.centerX) < sceneConfig.avenueSpacing * 0.55
+              ? sceneConfig.mainRoadWidth
+              : sceneConfig.roadWidth,
+            scene.groundDepth * 0.72,
+          ]}
         />
       ))}
 
@@ -615,10 +712,10 @@ function SceneContent({
       {palette.dayFactor < 0.58 ? (
         <Stars
           count={1600}
-          depth={420}
+          depth={Math.max(420, scene.extent * 0.75)}
           factor={4}
           fade
-          radius={280}
+          radius={Math.max(280, scene.extent * 0.52)}
           saturation={0}
           speed={0.2}
         />
@@ -626,23 +723,37 @@ function SceneContent({
 
       <OrbitControls
         enablePan={false}
-        maxDistance={12000}
+        maxDistance={Math.max(12000, scene.extent * 4.8)}
         maxPolarAngle={Math.PI / 2.08}
         minDistance={28}
         minPolarAngle={Math.PI / 5.8}
-        target={[0, 30, 52]}
+        target={[scene.centerX, 30, scene.centerZ]}
       />
     </>
   );
 }
 
 export function SkylineScene(props: SkylineSceneProps) {
+  const scene = useMemo(
+    () => computeSceneMetrics(props.districts, props.repos),
+    [props.districts, props.repos],
+  );
+
   return (
     <Canvas
-      camera={{ fov: 18, near: 1, position: [0, 152, 612], far: 12000 }}
+      camera={{
+        fov: 18,
+        near: 1,
+        position: [
+          scene.centerX,
+          Math.max(160, scene.extent * 0.32),
+          scene.centerZ + Math.max(620, scene.extent * 1.16),
+        ],
+        far: Math.max(12000, scene.extent * 6),
+      }}
       gl={{ antialias: true, alpha: true }}
     >
-      <SceneContent {...props} />
+      <SceneContent {...props} scene={scene} />
     </Canvas>
   );
 }
