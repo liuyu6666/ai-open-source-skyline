@@ -617,13 +617,16 @@ function SceneContent({
       ) : null}
 
       <OrbitControls
-        enablePan={false}
+        makeDefault
+        enablePan
         enableDamping={false}
         maxDistance={Math.max(12000, scene.extent * 4.8)}
         maxPolarAngle={Math.PI / 2.08}
         minDistance={28}
         minPolarAngle={Math.PI / 5.8}
+        panSpeed={0.72}
         rotateSpeed={0.58}
+        screenSpacePanning={false}
         target={[scene.centerX, 30, scene.centerZ]}
         zoomSpeed={0.72}
       />
@@ -649,9 +652,10 @@ export function SkylineScene(props: SkylineSceneProps) {
         ],
         far: Math.max(12000, scene.extent * 6),
       }}
-      dpr={[0.66, 1]}
-      frameloop="demand"
+      dpr={[0.72, 1]}
+      frameloop="always"
       gl={{ antialias: false, alpha: true, powerPreference: "high-performance" }}
+      style={{ touchAction: "none" }}
     >
       <SceneContent {...props} scene={scene} />
     </Canvas>
