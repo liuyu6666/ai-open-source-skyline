@@ -419,22 +419,24 @@ select {
 }
 
 .scene-note {
-  width: fit-content;
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  z-index: 2;
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 10px 14px;
-  border-radius: 999px;
-  background: var(--panel-soft);
-  pointer-events: auto;
+  max-width: min(760px, calc(100vw - 48px));
+  pointer-events: none;
 }
 
 .scene-note span {
-  color: var(--text-main);
+  color: rgba(248, 251, 255, 0.9);
   font-family: var(--font-mono), "IBM Plex Mono", monospace;
   font-size: 0.74rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  text-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
 }
 
 .detail-drawer,
@@ -649,11 +651,8 @@ select {
   }
 
   .scene-note {
-    width: 100%;
-  }
-
-  .detail-drawer,
-  .detail-hint {
-    border-radius: 20px;
+    left: 16px;
+    bottom: 16px;
+    max-width: calc(100vw - 32px);
   }
 }

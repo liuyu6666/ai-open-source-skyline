@@ -405,27 +405,6 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
           </div>
 
           <div className="top-rail">
-            <div className="top-actions">
-              <button className="action-button" disabled={isRefreshing} onClick={refreshSnapshot} type="button">
-                {isRefreshing ? copy.refreshing : copy.refresh}
-              </button>
-              <Link className="ghost-link" href={copy.switchHref}>
-                {copy.switchLabel}
-              </Link>
-              <div className="clock-pill">
-                <span>{palette.phaseLabel}</span>
-                <strong suppressHydrationWarning>
-                  {isMounted
-                    ? now.toLocaleTimeString(copy.timeLocale, {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : "--:--"}
-                </strong>
-                <small suppressHydrationWarning>{localTimeZone}</small>
-              </div>
-            </div>
-
             <section className="global-grid">
               <StatTile
                 label={copy.stats.tracked.label}
@@ -462,10 +441,31 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
                 value={newestRepo?.name ?? copy.emptyValue}
               />
             </section>
+
+            <div className="top-actions">
+              <button className="action-button" disabled={isRefreshing} onClick={refreshSnapshot} type="button">
+                {isRefreshing ? copy.refreshing : copy.refresh}
+              </button>
+              <Link className="ghost-link" href={copy.switchHref}>
+                {copy.switchLabel}
+              </Link>
+              <div className="clock-pill">
+                <span>{palette.phaseLabel}</span>
+                <strong suppressHydrationWarning>
+                  {isMounted
+                    ? now.toLocaleTimeString(copy.timeLocale, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "--:--"}
+                </strong>
+                <small suppressHydrationWarning>{localTimeZone}</small>
+              </div>
+            </div>
           </div>
         </section>
 
-        <div className="glass scene-note">
+        <div className="scene-note">
           <span>{copy.sceneLegend.height}</span>
           <span>{copy.sceneLegend.lights}</span>
           <span>{copy.sceneLegend.interaction}</span>
