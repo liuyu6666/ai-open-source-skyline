@@ -39,6 +39,9 @@ CREATE INDEX IF NOT EXISTS skyline_repos_stars_idx
 CREATE INDEX IF NOT EXISTS skyline_repos_last_seen_idx
   ON skyline_repos (last_seen_at DESC);
 
+CREATE INDEX IF NOT EXISTS skyline_repos_last_enriched_idx
+  ON skyline_repos (last_enriched_at ASC, last_seen_at DESC);
+
 CREATE TABLE IF NOT EXISTS skyline_repo_daily_metrics (
   repo_full_name TEXT NOT NULL REFERENCES skyline_repos(full_name) ON DELETE CASCADE,
   metric_date TEXT NOT NULL,

@@ -76,6 +76,34 @@ function selectCandidateRepos(database, { days, limit }) {
     });
 }
 
+function selectCatalogRepos(database, { limit, missingOnly }) {
+  return database
+    .prepare(
+      `
+        SELECT
+          full_name,
+          last_enriched_at,
+          stargazers_count,
+          last_seen_at
+        FROM skyline_repos
+        WHERE archived = 0
+          AND disabled = 0
+          AND is_fork = 0
+          AND ($missingOnly = 0 OR last_enriched_at IS NULL OR COALESCE(stargazers_count, 0) = 0)
+        ORDER BY
+          CASE WHEN last_enriched_at IS NULL THEN 0 ELSE 1 END ASC,
+          last_enriched_at ASC,
+          last_seen_at DESC,
+          full_name ASC
+        LIMIT $limit
+      `,
+    )
+    .all({
+      limit,
+      missingOnly: missingOnly ? 1 : 0,
+    });
+}
+
 function updateRepoMetadata(database, repo) {
   database
     .prepare(
@@ -128,14 +156,52 @@ function updateRepoMetadata(database, repo) {
     });
 }
 
-async function enrichSingleRepo(database, fullName, delayMs) {
+function markRepoEnrichmentAttempt(database, fullName) {
+  database
+    .prepare(
+      `
+        UPDATE skyline_repos
+        SET
+          last_enriched_at = CURRENT_TIMESTAMP,
+          last_seen_at = CURRENT_TIMESTAMP
+        WHERE full_name = $fullName
+      `,
+    )
+    .run({
+      fullName,
+    });
+}
+
+function createRateLimiter(ratePerHour) {
+  if (!ratePerHour || ratePerHour <= 0) {
+    return async () => {};
+  }
+
+  const minIntervalMs = Math.ceil(3_600_000 / ratePerHour);
+  let nextAllowedAt = 0;
+
+  return async () => {
+    const now = Date.now();
+    const scheduledAt = Math.max(now, nextAllowedAt);
+    const waitMs = scheduledAt - now;
+    nextAllowedAt = scheduledAt + minIntervalMs;
+
+    if (waitMs > 0) {
+      await sleep(waitMs);
+    }
+  };
+}
+
+async function enrichSingleRepo(database, fullName, delayMs, waitForTurn) {
   try {
+    await waitForTurn();
     const repo = await fetchGitHubJson(`/repos/${fullName}`);
     updateRepoMetadata(database, repo);
     await sleep(delayMs);
     return { fullName, ok: true };
   } catch (error) {
     console.warn(`Failed to enrich ${fullName}`, error);
+    markRepoEnrichmentAttempt(database, fullName);
     await sleep(delayMs);
     return { fullName, ok: false };
   }
@@ -146,6 +212,9 @@ export async function enrichRepos({
   days = 30,
   delayMs = 120,
   limit = 1500,
+  missingOnly = false,
+  ratePerHour = 4200,
+  scope = "recent",
 } = {}) {
   loadLocalEnv();
 
@@ -153,6 +222,7 @@ export async function enrichRepos({
   const effectiveLimit = hasToken ? limit : Math.min(limit, 45);
   const effectiveConcurrency = hasToken ? concurrency : 1;
   const effectiveDelayMs = hasToken ? delayMs : Math.max(delayMs, 1800);
+  const effectiveRatePerHour = hasToken ? ratePerHour : Math.min(ratePerHour, 45);
 
   const database = openSkylineDatabase();
   ensureSchema(database);
@@ -164,12 +234,20 @@ export async function enrichRepos({
       );
     }
 
-    const candidates = selectCandidateRepos(database, {
-      days,
-      limit: effectiveLimit,
-    });
+    const candidates =
+      scope === "recent"
+        ? selectCandidateRepos(database, {
+            days,
+            limit: effectiveLimit,
+          })
+        : selectCatalogRepos(database, {
+            limit: effectiveLimit,
+            missingOnly,
+          });
     const pending = [...candidates];
     const results = [];
+    const waitForTurn = createRateLimiter(effectiveRatePerHour);
+    let processed = 0;
 
     async function worker() {
       for (;;) {
@@ -179,7 +257,20 @@ export async function enrichRepos({
           return;
         }
 
-        results.push(await enrichSingleRepo(database, next.full_name, effectiveDelayMs));
+        const result = await enrichSingleRepo(
+          database,
+          next.full_name,
+          effectiveDelayMs,
+          waitForTurn,
+        );
+        results.push(result);
+        processed += 1;
+
+        if (processed % 100 === 0 || processed === candidates.length) {
+          console.log(
+            `[enrich] ${processed}/${candidates.length} processed, ok=${results.filter((item) => item.ok).length}, failed=${results.filter((item) => !item.ok).length}`,
+          );
+        }
       }
     }
 
@@ -195,7 +286,10 @@ export async function enrichRepos({
       failed: results.filter((item) => !item.ok).length,
       limit: effectiveLimit,
       mode: hasToken ? "authenticated" : "unauthenticated",
+      missingOnly,
+      ratePerHour: effectiveRatePerHour,
       requested: candidates.length,
+      scope,
       succeeded: results.filter((item) => item.ok).length,
     };
 
@@ -214,6 +308,9 @@ if (isMainModule(import.meta)) {
     days: Number(args.days ?? 30),
     delayMs: Number(args.delay ?? 120),
     limit: Number(args.limit ?? 1500),
+    missingOnly: args["missing-only"] === "true" || args["missing-only"] === "1",
+    ratePerHour: Number(args["rate-per-hour"] ?? 4200),
+    scope: args.scope ?? "recent",
   })
     .then((summary) => {
       console.log("Completed GitHub enrichment.");

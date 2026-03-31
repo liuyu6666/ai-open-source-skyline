@@ -10,6 +10,7 @@
     "db:schema": "node scripts/skyline/apply-schema.mjs",
     "db:backfill:30d": "node scripts/skyline/backfill-gharchive.mjs --days=30",
     "db:enrich": "node scripts/skyline/enrich-repos.mjs",
+    "db:enrich:catalog": "node scripts/skyline/enrich-catalog.mjs",
     "db:snapshot": "node scripts/skyline/materialize-snapshot.mjs",
     "db:bootstrap:30d": "node scripts/skyline/bootstrap-30d.mjs"
   },
