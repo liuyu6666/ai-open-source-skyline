@@ -14,6 +14,15 @@ type SiteCopy = {
   switchHref: string;
   browserTimeFallback: string;
   emptyValue: string;
+  controls: {
+    searchPlaceholder: string;
+    clear: string;
+    allDomains: string;
+    showing: string;
+    verified: string;
+    snapshot: string;
+    noMatches: string;
+  };
   phase: {
     day: string;
     dusk: string;
@@ -66,6 +75,15 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     switchHref: "/en",
     browserTimeFallback: "浏览器时间",
     emptyValue: "暂无",
+    controls: {
+      searchPlaceholder: "搜索仓库名 / owner / full name",
+      clear: "清除筛选",
+      allDomains: "全部分区",
+      showing: "当前显示",
+      verified: "GitHub 已校验",
+      snapshot: "快照时间",
+      noMatches: "没有匹配结果",
+    },
     phase: {
       day: "白天",
       dusk: "傍晚",
@@ -140,6 +158,15 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     switchHref: "/zh",
     browserTimeFallback: "Browser time",
     emptyValue: "N/A",
+    controls: {
+      searchPlaceholder: "Search repo / owner / full name",
+      clear: "Clear filters",
+      allDomains: "All districts",
+      showing: "Showing",
+      verified: "GitHub verified",
+      snapshot: "Snapshot",
+      noMatches: "No matching repos",
+    },
     phase: {
       day: "Day",
       dusk: "Dusk",

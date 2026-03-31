@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useEffect, useEffectEvent, useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useEffectEvent, useMemo, useState } from "react";
 
 import { SkylineScene } from "@/components/skyline-scene";
 import {
@@ -12,7 +12,7 @@ import {
   getSiteCopy,
   type SupportedLocale,
 } from "@/lib/site-copy";
-import type { SkylineSnapshot } from "@/lib/skyline-data";
+import type { DomainKey, SkylineSnapshot } from "@/lib/skyline-data";
 
 type SkylineAppProps = {
   initialSnapshot: SkylineSnapshot;
@@ -134,6 +134,25 @@ function Sparkline({ points }: { points: number[] }) {
   );
 }
 
+function ResultRow({
+  active,
+  label,
+  note,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  note: string;
+  onClick: () => void;
+}) {
+  return (
+    <button className={`result-row${active ? " active" : ""}`} onClick={onClick} type="button">
+      <strong>{label}</strong>
+      <span>{note}</span>
+    </button>
+  );
+}
+
 export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
   const copy = getSiteCopy(locale);
   const [snapshot, setSnapshot] = useState(initialSnapshot);
@@ -142,8 +161,19 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [localTimeZone, setLocalTimeZone] = useState(copy.browserTimeFallback);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeDomain, setActiveDomain] = useState<DomainKey | "all">("all");
+  const deferredQuery = useDeferredValue(searchQuery.trim().toLowerCase());
   const palette = getSkyPalette(now, locale);
 
+  const districtLabels = useMemo(
+    () =>
+      snapshot.districts.map((district) => ({
+        id: district.id,
+        label: copy.domainLabels[district.id],
+      })),
+    [copy.domainLabels, snapshot.districts],
+  );
   const topMover = useMemo(
     () => [...snapshot.repos].sort((a, b) => b.starDelta7d - a.starDelta7d)[0],
     [snapshot.repos],
@@ -152,6 +182,34 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
     () => [...snapshot.repos].sort((a, b) => a.createdDaysAgo - b.createdDaysAgo)[0],
     [snapshot.repos],
   );
+  const filteredRepos = useMemo(
+    () =>
+      snapshot.repos.filter((repo) => {
+        if (activeDomain !== "all" && repo.domain !== activeDomain) {
+          return false;
+        }
+
+        if (!deferredQuery) {
+          return true;
+        }
+
+        const haystack = `${repo.name} ${repo.owner} ${repo.fullName}`.toLowerCase();
+        return haystack.includes(deferredQuery);
+      }),
+    [activeDomain, deferredQuery, snapshot.repos],
+  );
+  const resultRepos = useMemo(
+    () =>
+      [...filteredRepos]
+        .sort((left, right) => right.totalStars - left.totalStars)
+        .slice(0, deferredQuery ? 8 : 6),
+    [deferredQuery, filteredRepos],
+  );
+  const verifiedRepos = useMemo(
+    () => snapshot.repos.filter((repo) => repo.totalStars > 0).length,
+    [snapshot.repos],
+  );
+  const hasActiveFilters = activeDomain !== "all" || deferredQuery.length > 0;
   const selectedRepo =
     selectedId === null ? null : snapshot.repos.find((repo) => repo.id === selectedId) ?? null;
   const districts = useMemo(
@@ -178,6 +236,12 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
 
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (selectedId && !filteredRepos.some((repo) => repo.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [filteredRepos, selectedId]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--page-backdrop", palette.backdrop);
@@ -216,7 +280,7 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
           onClearSelection={() => setSelectedId(null)}
           onSelect={setSelectedId}
           palette={palette}
-          repos={snapshot.repos}
+          repos={filteredRepos}
           selectedId={selectedId}
         />
       </div>
@@ -227,6 +291,90 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
             <span className="eyebrow">{copy.brand}</span>
             <h1>{copy.title}</h1>
             <p>{snapshot.demoMode ? copy.demoSubtitle : copy.liveSubtitle}</p>
+
+            <section className="glass control-panel">
+              <div className="control-header">
+                <label className="search-shell">
+                  <span className="eyebrow">Radar</span>
+                  <input
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder={copy.controls.searchPlaceholder}
+                    type="search"
+                    value={searchQuery}
+                  />
+                </label>
+
+                {hasActiveFilters ? (
+                  <button
+                    className="ghost-link control-clear"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setActiveDomain("all");
+                    }}
+                    type="button"
+                  >
+                    {copy.controls.clear}
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="chip-row">
+                <button
+                  className={`filter-chip${activeDomain === "all" ? " active" : ""}`}
+                  onClick={() => setActiveDomain("all")}
+                  type="button"
+                >
+                  {copy.controls.allDomains}
+                </button>
+                {districtLabels.map((district) => (
+                  <button
+                    key={district.id}
+                    className={`filter-chip${activeDomain === district.id ? " active" : ""}`}
+                    onClick={() => setActiveDomain(district.id)}
+                    type="button"
+                  >
+                    {district.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="control-metrics">
+                <div>
+                  <span>{copy.controls.showing}</span>
+                  <strong>
+                    {formatNumber(filteredRepos.length, locale)} /{" "}
+                    {formatNumber(snapshot.repos.length, locale)}
+                  </strong>
+                </div>
+                <div>
+                  <span>{copy.controls.verified}</span>
+                  <strong>
+                    {formatNumber(verifiedRepos, locale)} /{" "}
+                    {formatNumber(snapshot.repos.length, locale)}
+                  </strong>
+                </div>
+                <div>
+                  <span>{copy.controls.snapshot}</span>
+                  <strong>{formatGeneratedAt(snapshot.generatedAt, locale)}</strong>
+                </div>
+              </div>
+
+              <div className="result-list">
+                {resultRepos.length ? (
+                  resultRepos.map((repo) => (
+                    <ResultRow
+                      key={repo.id}
+                      active={selectedId === repo.id}
+                      label={repo.fullName}
+                      note={`${formatNumber(repo.totalStars, locale)} ${copy.drawer.totalStars}`}
+                      onClick={() => setSelectedId(repo.id)}
+                    />
+                  ))
+                ) : (
+                  <div className="result-empty">{copy.controls.noMatches}</div>
+                )}
+              </div>
+            </section>
           </div>
 
           <div className="top-rail">

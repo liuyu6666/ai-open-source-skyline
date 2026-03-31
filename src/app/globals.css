@@ -124,6 +124,145 @@ select {
   font-size: 0.98rem;
 }
 
+.control-panel {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 24px;
+  display: grid;
+  gap: 14px;
+  max-width: 580px;
+}
+
+.control-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.search-shell {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+}
+
+.search-shell input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(5, 10, 18, 0.66);
+  color: var(--text-main);
+  outline: none;
+}
+
+.search-shell input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-shell input:focus {
+  border-color: rgba(125, 211, 252, 0.42);
+  box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.12);
+}
+
+.control-clear {
+  white-space: nowrap;
+}
+
+.chip-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(9, 16, 28, 0.58);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    background 160ms ease;
+}
+
+.filter-chip:hover,
+.result-row:hover {
+  transform: translateY(-1px);
+}
+
+.filter-chip.active {
+  border-color: rgba(125, 211, 252, 0.34);
+  background: rgba(125, 211, 252, 0.12);
+  color: var(--text-main);
+}
+
+.control-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.control-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.control-metrics span,
+.result-row span,
+.result-empty {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.control-metrics strong {
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.result-list {
+  display: grid;
+  gap: 8px;
+}
+
+.result-row {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-main);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.result-row strong {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.result-row.active {
+  border-color: rgba(125, 211, 252, 0.34);
+  background: rgba(125, 211, 252, 0.1);
+}
+
+.result-empty {
+  padding: 12px 4px 2px;
+}
+
 .top-rail {
   display: grid;
   gap: 12px;
@@ -381,6 +520,10 @@ select {
     width: 100%;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .control-panel {
+    max-width: 100%;
+  }
 }
 
 @media (max-width: 920px) {
@@ -394,6 +537,14 @@ select {
 
   .global-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .control-header {
+    flex-direction: column;
+  }
+
+  .control-metrics {
+    grid-template-columns: 1fr;
   }
 
   .detail-drawer,
@@ -419,6 +570,12 @@ select {
   .detail-grid,
   .signal-panel {
     grid-template-columns: 1fr;
+  }
+
+  .search-shell input,
+  .filter-chip,
+  .result-row {
+    font-size: 0.92rem;
   }
 
   .top-actions {
