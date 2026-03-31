@@ -1,6 +1,7 @@
 import {
   ensureSchema,
   fetchGitHubJson,
+  getGitHubToken,
   isMainModule,
   loadLocalEnv,
   openSkylineDatabase,
@@ -148,11 +149,25 @@ export async function enrichRepos({
 } = {}) {
   loadLocalEnv();
 
+  const hasToken = Boolean(getGitHubToken());
+  const effectiveLimit = hasToken ? limit : Math.min(limit, 45);
+  const effectiveConcurrency = hasToken ? concurrency : 1;
+  const effectiveDelayMs = hasToken ? delayMs : Math.max(delayMs, 1800);
+
   const database = openSkylineDatabase();
   ensureSchema(database);
 
   try {
-    const candidates = selectCandidateRepos(database, { days, limit });
+    if (!hasToken) {
+      console.warn(
+        `Missing GITHUB_TOKEN/GH_TOKEN. Falling back to unauthenticated enrichment for ${effectiveLimit} repos.`,
+      );
+    }
+
+    const candidates = selectCandidateRepos(database, {
+      days,
+      limit: effectiveLimit,
+    });
     const pending = [...candidates];
     const results = [];
 
@@ -164,19 +179,22 @@ export async function enrichRepos({
           return;
         }
 
-        results.push(await enrichSingleRepo(database, next.full_name, delayMs));
+        results.push(await enrichSingleRepo(database, next.full_name, effectiveDelayMs));
       }
     }
 
     await Promise.all(
-      Array.from({ length: Math.max(1, concurrency) }, () => worker()),
+      Array.from({ length: Math.max(1, effectiveConcurrency) }, () => worker()),
     );
 
     const summary = {
       completedAt: new Date().toISOString(),
+      concurrency: effectiveConcurrency,
       days,
+      delayMs: effectiveDelayMs,
       failed: results.filter((item) => !item.ok).length,
-      limit,
+      limit: effectiveLimit,
+      mode: hasToken ? "authenticated" : "unauthenticated",
       requested: candidates.length,
       succeeded: results.filter((item) => item.ok).length,
     };

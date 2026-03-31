@@ -209,22 +209,23 @@ export async function streamGhArchiveLines(metricDate, hour, onLine) {
 export function getGitHubToken() {
   const token = process.env.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim();
 
-  if (!token) {
-    throw new Error("Missing GITHUB_TOKEN or GH_TOKEN for GitHub enrichment.");
-  }
-
-  return token;
+  return token || null;
 }
 
 export async function fetchGitHubJson(pathname) {
   const token = getGitHubToken();
+  const headers = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "github-skyline-radar",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`https://api.github.com${pathname}`, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
-      "User-Agent": "github-skyline-radar",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
+    headers,
   });
 
   if (!response.ok) {
