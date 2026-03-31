@@ -84,8 +84,10 @@ select {
   pointer-events: none;
 }
 
-.hud > * {
-  pointer-events: auto;
+.top-hud,
+.brand-panel,
+.top-rail {
+  pointer-events: none;
 }
 
 .top-hud {
@@ -137,6 +139,7 @@ select {
   display: grid;
   gap: 14px;
   max-width: 580px;
+  pointer-events: auto;
 }
 
 .control-header {
@@ -281,6 +284,7 @@ select {
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
+  pointer-events: auto;
 }
 
 .action-button,
@@ -328,6 +332,7 @@ select {
   border-radius: 20px;
   background: rgba(9, 16, 28, 0.66);
   border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: auto;
 }
 
 .clock-pill span,
@@ -354,6 +359,7 @@ select {
   width: min(100%, 860px);
   grid-template-columns: repeat(6, minmax(92px, 1fr));
   gap: 8px;
+  pointer-events: auto;
 }
 
 .stat-tile {
@@ -383,6 +389,7 @@ select {
   padding: 10px 14px;
   border-radius: 999px;
   background: var(--panel-soft);
+  pointer-events: auto;
 }
 
 .scene-note span {
@@ -400,6 +407,7 @@ select {
   right: 24px;
   width: min(360px, calc(100vw - 32px));
   border-radius: 24px;
+  pointer-events: auto;
 }
 
 .detail-drawer {
