@@ -166,6 +166,7 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
   const [isMounted, setIsMounted] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [localTimeZone, setLocalTimeZone] = useState(copy.browserTimeFallback);
+  const [isRadarOpen, setIsRadarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeDomain, setActiveDomain] = useState<DomainKey | "all">("all");
   const deferredQuery = useDeferredValue(searchQuery.trim().toLowerCase());
@@ -297,7 +298,18 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
             <h1>{copy.title}</h1>
             <p>{snapshot.demoMode ? copy.demoSubtitle : copy.liveSubtitle}</p>
 
-            <section className="glass control-panel">
+            <div className="brand-actions">
+              <button
+                aria-expanded={isRadarOpen}
+                className="ghost-link radar-toggle"
+                onClick={() => setIsRadarOpen((open) => !open)}
+                type="button"
+              >
+                {isRadarOpen ? copy.controls.closeRadar : copy.controls.openRadar}
+              </button>
+            </div>
+
+            <section className={`glass control-panel${isRadarOpen ? " open" : ""}`}>
               <div className="control-header">
                 <label className="search-shell">
                   <span className="eyebrow">Radar</span>

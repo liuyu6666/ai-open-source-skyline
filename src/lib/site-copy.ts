@@ -15,6 +15,7 @@ type SiteCopy = {
   browserTimeFallback: string;
   emptyValue: string;
   controls: {
+    closeRadar: string;
     searchPlaceholder: string;
     clear: string;
     allDomains: string;
@@ -22,6 +23,7 @@ type SiteCopy = {
     verified: string;
     snapshot: string;
     noMatches: string;
+    openRadar: string;
   };
   phase: {
     day: string;
@@ -76,6 +78,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     browserTimeFallback: "浏览器时间",
     emptyValue: "暂无",
     controls: {
+      closeRadar: "收起雷达",
       searchPlaceholder: "搜索仓库名 / owner / full name",
       clear: "清除筛选",
       allDomains: "全部分区",
@@ -83,6 +86,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       verified: "GitHub 已校验",
       snapshot: "快照时间",
       noMatches: "没有匹配结果",
+      openRadar: "打开雷达",
     },
     phase: {
       day: "白天",
@@ -159,6 +163,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     browserTimeFallback: "Browser time",
     emptyValue: "N/A",
     controls: {
+      closeRadar: "Close radar",
       searchPlaceholder: "Search repo / owner / full name",
       clear: "Clear filters",
       allDomains: "All districts",
@@ -166,6 +171,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       verified: "GitHub verified",
       snapshot: "Snapshot",
       noMatches: "No matching repos",
+      openRadar: "Open radar",
     },
     phase: {
       day: "Day",

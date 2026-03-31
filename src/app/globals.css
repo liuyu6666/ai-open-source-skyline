@@ -102,6 +102,17 @@ select {
   padding-top: 6px;
 }
 
+.brand-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  pointer-events: auto;
+}
+
+.radar-toggle {
+  min-width: 132px;
+}
+
 .eyebrow {
   display: inline-flex;
   align-items: center;
@@ -133,13 +144,29 @@ select {
 }
 
 .control-panel {
-  margin-top: 18px;
+  position: fixed;
+  top: 206px;
+  left: 24px;
+  z-index: 4;
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 238px);
+  overflow: auto;
   padding: 16px;
   border-radius: 24px;
   display: grid;
   gap: 14px;
-  max-width: 580px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(calc(-100% - 28px));
+  transition:
+    transform 260ms ease,
+    opacity 180ms ease;
+}
+
+.control-panel.open {
   pointer-events: auto;
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .control-header {
@@ -534,10 +561,6 @@ select {
     width: 100%;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-
-  .control-panel {
-    max-width: 100%;
-  }
 }
 
 @media (max-width: 920px) {
@@ -559,6 +582,20 @@ select {
 
   .control-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .control-panel {
+    top: auto;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: auto;
+    max-height: min(62vh, 560px);
+    transform: translateY(calc(100% + 24px));
+  }
+
+  .control-panel.open {
+    transform: translateY(0);
   }
 
   .detail-drawer,
