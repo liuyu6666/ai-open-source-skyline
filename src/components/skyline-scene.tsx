@@ -286,7 +286,7 @@ const Building = memo(function Building({
   onSelect: (id: string) => void;
 }) {
   const shellRef = useRef<THREE.Mesh>(null);
-  const glowRef = useRef<THREE.Mesh>(null);
+  const coreRef = useRef<THREE.Mesh>(null);
   const crownRef = useRef<THREE.Mesh>(null);
   const roofHaloRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
@@ -310,29 +310,20 @@ const Building = memo(function Building({
       );
     }
 
-    if (glowRef.current) {
-      const material = glowRef.current.material as THREE.MeshStandardMaterial;
-      const targetGlow = palette.isNight
-        ? (0.18 + repo.lightStrength * 2.5) * pulse
-        : repo.lightStrength * 0.08;
+    if (coreRef.current) {
+      const material = coreRef.current.material as THREE.MeshStandardMaterial;
+      const targetGlow = (0.34 + repo.lightStrength * 1.85) * pulse;
 
       material.emissiveIntensity = THREE.MathUtils.lerp(
         material.emissiveIntensity,
         targetGlow,
-        0.08,
-      );
-      material.opacity = THREE.MathUtils.lerp(
-        material.opacity,
-        palette.isNight ? 0.9 : 0.28,
         0.08,
       );
     }
 
     if (crownRef.current) {
       const material = crownRef.current.material as THREE.MeshStandardMaterial;
-      const targetGlow = palette.isNight
-        ? (0.28 + repo.lightStrength * 1.85) * pulse
-        : (0.18 + repo.lightStrength * 0.92) * pulse;
+      const targetGlow = (0.26 + repo.lightStrength * 1.2) * pulse;
 
       material.emissiveIntensity = THREE.MathUtils.lerp(
         material.emissiveIntensity,
@@ -341,19 +332,15 @@ const Building = memo(function Building({
       );
       material.opacity = THREE.MathUtils.lerp(
         material.opacity,
-        palette.isNight ? 0.88 : 0.58,
+        0.9,
         0.08,
       );
     }
 
     if (roofHaloRef.current) {
       const material = roofHaloRef.current.material as THREE.MeshBasicMaterial;
-      const targetOpacity = palette.isNight
-        ? 0.12 + repo.lightStrength * 0.22
-        : 0.08 + repo.lightStrength * 0.18;
-      const targetScale = palette.isNight
-        ? 1.02 + repo.lightStrength * 0.4 * pulse
-        : 0.92 + repo.lightStrength * 0.32 * pulse;
+      const targetOpacity = 0.09 + repo.lightStrength * 0.15;
+      const targetScale = 0.96 + repo.lightStrength * 0.28 * pulse;
 
       material.opacity = THREE.MathUtils.lerp(material.opacity, targetOpacity, 0.08);
       roofHaloRef.current.scale.x = THREE.MathUtils.lerp(
@@ -397,11 +384,11 @@ const Building = memo(function Building({
         <meshStandardMaterial
           color={repo.color}
           emissive={repo.color}
-          emissiveIntensity={palette.isNight ? 0.05 : 0.02}
+          emissiveIntensity={0.06}
           metalness={0.12}
           roughness={0.24}
           transparent
-          opacity={palette.isNight ? 0.48 : 0.34}
+          opacity={0.28}
         />
         {(selected || hovered) && <Edges color="#ffffff" scale={1.01} />}
       </mesh>
@@ -416,29 +403,28 @@ const Building = memo(function Building({
         <meshStandardMaterial
           color={repo.color}
           emissive={repo.color}
-          emissiveIntensity={palette.isNight ? 0.04 : 0.015}
+          emissiveIntensity={0.08}
           metalness={0.14}
           roughness={0.22}
           transparent
-          opacity={palette.isNight ? 0.42 : 0.3}
+          opacity={0.24}
         />
       </mesh>
 
       <mesh
-        ref={glowRef}
+        ref={coreRef}
         position={[0, repo.height / 2 + 0.28, 0]}
         renderOrder={3}
       >
         <boxGeometry
-          args={[repo.width * 0.62, Math.max(repo.height - 2.6, 5.4), repo.depth * 0.62]}
+          args={[repo.width * 0.56, Math.max(repo.height - 3.4, 4.8), repo.depth * 0.56]}
         />
         <meshStandardMaterial
-          color={repo.color}
+          color="#f3f8ff"
           emissive={repo.color}
-          emissiveIntensity={0.1}
-          transparent
-          depthWrite={false}
-          opacity={palette.isNight ? 0.88 : 0.28}
+          emissiveIntensity={0.44}
+          metalness={0.02}
+          roughness={0.36}
         />
       </mesh>
 
@@ -453,10 +439,10 @@ const Building = memo(function Building({
         <meshStandardMaterial
           color={repo.color}
           emissive={repo.color}
-          emissiveIntensity={0.18}
+          emissiveIntensity={0.26}
           transparent
           depthWrite={false}
-          opacity={palette.isNight ? 0.86 : 0.56}
+          opacity={0.9}
         />
       </mesh>
 
@@ -471,7 +457,7 @@ const Building = memo(function Building({
           color={repo.color}
           depthWrite={false}
           transparent
-          opacity={0.14}
+          opacity={0.12}
         />
       </mesh>
 

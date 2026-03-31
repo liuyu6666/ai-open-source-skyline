@@ -321,18 +321,28 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
                   />
                 </label>
 
-                {hasActiveFilters ? (
+                <div className="control-actions">
+                  {hasActiveFilters ? (
+                    <button
+                      className="ghost-link control-clear"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setActiveDomain("all");
+                      }}
+                      type="button"
+                    >
+                      {copy.controls.clear}
+                    </button>
+                  ) : null}
+
                   <button
-                    className="ghost-link control-clear"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setActiveDomain("all");
-                    }}
+                    className="ghost-link control-close"
+                    onClick={() => setIsRadarOpen(false)}
                     type="button"
                   >
-                    {copy.controls.clear}
+                    {copy.drawer.close}
                   </button>
-                ) : null}
+                </div>
               </div>
 
               <div className="chip-row">

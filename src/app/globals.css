@@ -176,6 +176,12 @@ select {
   justify-content: space-between;
 }
 
+.control-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .search-shell {
   display: grid;
   gap: 8px;
@@ -203,6 +209,10 @@ select {
 }
 
 .control-clear {
+  white-space: nowrap;
+}
+
+.control-close {
   white-space: nowrap;
 }
 
@@ -578,6 +588,11 @@ select {
 
   .control-header {
     flex-direction: column;
+  }
+
+  .control-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .control-metrics {
