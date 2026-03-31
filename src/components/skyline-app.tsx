@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { startTransition, useDeferredValue, useEffect, useEffectEvent, useMemo, useState } from "react";
 
-import { SkylineScene } from "@/components/skyline-scene";
 import {
   formatGeneratedAt,
   formatHoursAgo,
@@ -13,6 +13,11 @@ import {
   type SupportedLocale,
 } from "@/lib/site-copy";
 import type { DomainKey, SkylineSnapshot } from "@/lib/skyline-data";
+
+const SkylineScene = dynamic(
+  () => import("@/components/skyline-scene").then((module) => module.SkylineScene),
+  { ssr: false },
+);
 
 type SkylineAppProps = {
   initialSnapshot: SkylineSnapshot;
