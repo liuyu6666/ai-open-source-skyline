@@ -1,9 +1,8 @@
 "use client";
 
 import { Edges, OrbitControls, Stars, Text } from "@react-three/drei";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef, useState } from "react";
-import * as THREE from "three";
+import { Canvas } from "@react-three/fiber";
+import { memo, useEffect, useMemo, useState } from "react";
 
 import skylineLayoutConfig from "../../config/skyline-layout.json";
 import type { DistrictRecord, RepoRecord } from "@/lib/skyline-data";
@@ -124,14 +123,14 @@ function computeSceneMetrics(districts: LabeledDistrict[], repos: RepoRecord[]):
   };
 }
 
-function buildFillerTowers(scene: SceneMetrics): FillerTower[] {
+function buildFillerTowers(scene: SceneMetrics, density = 1): FillerTower[] {
   const filler: FillerTower[] = [];
   const beltLeftX = scene.minX - sceneConfig.fillerGap;
   const beltRightX = scene.maxX + sceneConfig.fillerGap;
   const beltBackZ = scene.minZ - sceneConfig.fillerGap;
   const beltFrontZ = scene.maxZ + sceneConfig.fillerGap;
-  const zCount = Math.max(14, Math.floor((scene.maxZ - scene.minZ) / 18));
-  const xCount = Math.max(14, Math.floor((scene.maxX - scene.minX) / 18));
+  const zCount = Math.max(8, Math.floor(((scene.maxZ - scene.minZ) / 18) * density));
+  const xCount = Math.max(8, Math.floor(((scene.maxX - scene.minX) / 18) * density));
 
   for (let index = 0; index < zCount; index += 1) {
     const leftSeed = 500 + index * 3.1;
@@ -190,7 +189,7 @@ function buildFillerTowers(scene: SceneMetrics): FillerTower[] {
   return filler;
 }
 
-function DistrictPlate({
+const DistrictPlate = memo(function DistrictPlate({
   district,
   palette,
   onClearSelection,
@@ -244,9 +243,9 @@ function DistrictPlate({
       </Text>
     </group>
   );
-}
+});
 
-function RoadStrip({
+const RoadStrip = memo(function RoadStrip({
   position,
   size,
   color,
@@ -272,9 +271,9 @@ function RoadStrip({
       <meshStandardMaterial color={color} polygonOffset polygonOffsetFactor={-2} />
     </mesh>
   );
-}
+});
 
-function Building({
+const Building = memo(function Building({
   repo,
   palette,
   selected,
@@ -285,11 +284,16 @@ function Building({
   selected: boolean;
   onSelect: (id: string) => void;
 }) {
-  const shellRef = useRef<THREE.Mesh>(null);
-  const glowRef = useRef<THREE.Mesh>(null);
-  const crownRef = useRef<THREE.Mesh>(null);
-  const roofHaloRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
+  const shellY = repo.height / 2 + (hovered ? 0.46 : 0.28);
+  const glowY = repo.height / 2 + 0.28;
+  const baseGlow = palette.isNight ? 0.22 + repo.lightStrength * 1.9 : repo.lightStrength * 0.12;
+  const crownGlow = palette.isNight
+    ? 0.34 + repo.lightStrength * 1.42
+    : 0.2 + repo.lightStrength * 0.72;
+  const haloOpacity = palette.isNight
+    ? 0.14 + repo.lightStrength * 0.18
+    : 0.08 + repo.lightStrength * 0.12;
 
   useEffect(() => {
     document.body.style.cursor = hovered ? "pointer" : "default";
@@ -299,88 +303,9 @@ function Building({
     };
   }, [hovered]);
 
-  useFrame((state) => {
-    const pulse = 0.92 + Math.sin(state.clock.elapsedTime * 1.2 + repo.x * 0.11) * 0.08;
-
-    if (shellRef.current) {
-      shellRef.current.position.y = THREE.MathUtils.lerp(
-        shellRef.current.position.y,
-        repo.height / 2 + 0.28 + (hovered ? 0.18 : 0),
-        0.08,
-      );
-    }
-
-    if (glowRef.current) {
-      const material = glowRef.current.material as THREE.MeshStandardMaterial;
-      const targetGlow = palette.isNight
-        ? (0.18 + repo.lightStrength * 2.5) * pulse
-        : repo.lightStrength * 0.08;
-
-      material.emissiveIntensity = THREE.MathUtils.lerp(
-        material.emissiveIntensity,
-        targetGlow,
-        0.08,
-      );
-      material.opacity = THREE.MathUtils.lerp(
-        material.opacity,
-        palette.isNight ? 0.9 : 0.28,
-        0.08,
-      );
-    }
-
-    if (crownRef.current) {
-      const material = crownRef.current.material as THREE.MeshStandardMaterial;
-      const targetGlow = palette.isNight
-        ? (0.28 + repo.lightStrength * 1.85) * pulse
-        : (0.18 + repo.lightStrength * 0.92) * pulse;
-
-      material.emissiveIntensity = THREE.MathUtils.lerp(
-        material.emissiveIntensity,
-        targetGlow,
-        0.08,
-      );
-      material.opacity = THREE.MathUtils.lerp(
-        material.opacity,
-        palette.isNight ? 0.88 : 0.58,
-        0.08,
-      );
-    }
-
-    if (roofHaloRef.current) {
-      const material = roofHaloRef.current.material as THREE.MeshBasicMaterial;
-      const targetOpacity = palette.isNight
-        ? 0.12 + repo.lightStrength * 0.22
-        : 0.08 + repo.lightStrength * 0.18;
-      const targetScale = palette.isNight
-        ? 1.02 + repo.lightStrength * 0.4 * pulse
-        : 0.92 + repo.lightStrength * 0.32 * pulse;
-
-      material.opacity = THREE.MathUtils.lerp(material.opacity, targetOpacity, 0.08);
-      roofHaloRef.current.scale.x = THREE.MathUtils.lerp(
-        roofHaloRef.current.scale.x,
-        targetScale,
-        0.08,
-      );
-      roofHaloRef.current.scale.y = THREE.MathUtils.lerp(
-        roofHaloRef.current.scale.y,
-        targetScale,
-        0.08,
-      );
-      roofHaloRef.current.scale.z = THREE.MathUtils.lerp(
-        roofHaloRef.current.scale.z,
-        targetScale,
-        0.08,
-      );
-    }
-  });
-
   return (
     <group position={[repo.x, 0, repo.z]}>
       <mesh
-        onClick={(event) => {
-          event.stopPropagation();
-          onSelect(repo.id);
-        }}
         position={[0, 0.22, 0]}
       >
         <boxGeometry args={[repo.lotWidth * 1.04, 0.3, repo.lotDepth * 1.04]} />
@@ -394,13 +319,7 @@ function Building({
       </mesh>
 
       <mesh
-        ref={shellRef}
-        onClick={(event) => {
-          event.stopPropagation();
-          onSelect(repo.id);
-        }}
-        onPointerEnter={() => setHovered(true)}
-        onPointerLeave={() => setHovered(false)}
+        position={[0, shellY, 0]}
         renderOrder={1}
       >
         <boxGeometry args={[repo.width, repo.height, repo.depth]} />
@@ -417,10 +336,6 @@ function Building({
       </mesh>
 
       <mesh
-        onClick={(event) => {
-          event.stopPropagation();
-          onSelect(repo.id);
-        }}
         position={[0, repo.height * 0.78, 0]}
         renderOrder={2}
       >
@@ -439,12 +354,7 @@ function Building({
       </mesh>
 
       <mesh
-        ref={glowRef}
-        onClick={(event) => {
-          event.stopPropagation();
-          onSelect(repo.id);
-        }}
-        position={[0, repo.height / 2 + 0.28, 0]}
+        position={[0, glowY, 0]}
         renderOrder={3}
       >
         <boxGeometry
@@ -453,19 +363,14 @@ function Building({
         <meshStandardMaterial
           color={repo.color}
           emissive={repo.color}
-          emissiveIntensity={0.1}
+          emissiveIntensity={baseGlow}
           transparent
           depthWrite={false}
-          opacity={palette.isNight ? 0.88 : 0.28}
+          opacity={palette.isNight ? 0.74 : 0.2}
         />
       </mesh>
 
       <mesh
-        ref={crownRef}
-        onClick={(event) => {
-          event.stopPropagation();
-          onSelect(repo.id);
-        }}
         position={[0, repo.height + 0.68, 0]}
         renderOrder={4}
       >
@@ -475,25 +380,44 @@ function Building({
         <meshStandardMaterial
           color={repo.color}
           emissive={repo.color}
-          emissiveIntensity={0.18}
+          emissiveIntensity={crownGlow}
           transparent
           depthWrite={false}
-          opacity={palette.isNight ? 0.86 : 0.56}
+          opacity={palette.isNight ? 0.78 : 0.42}
         />
       </mesh>
 
       <mesh
-        ref={roofHaloRef}
-        onClick={(event) => {
-          event.stopPropagation();
-          onSelect(repo.id);
-        }}
         position={[0, repo.height + 1.1, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         renderOrder={5}
       >
         <circleGeometry args={[Math.max(repo.width, repo.depth) * 0.42, 36]} />
-        <meshBasicMaterial color={repo.color} depthWrite={false} transparent opacity={0.14} />
+        <meshBasicMaterial
+          color={repo.color}
+          depthWrite={false}
+          transparent
+          opacity={haloOpacity}
+        />
+      </mesh>
+
+      <mesh
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect(repo.id);
+        }}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+        position={[0, Math.max(repo.height * 0.52, 8), 0]}
+      >
+        <boxGeometry
+          args={[
+            repo.lotWidth * 1.08,
+            Math.max(repo.height + 5.2, 12),
+            repo.lotDepth * 1.08,
+          ]}
+        />
+        <meshBasicMaterial transparent opacity={0.001} depthWrite={false} />
       </mesh>
 
       {selected ? (
@@ -509,48 +433,17 @@ function Building({
       ) : null}
     </group>
   );
-}
+});
 
-function FillerBuilding({
+const FillerBuilding = memo(function FillerBuilding({
   tower,
   palette,
 }: {
   tower: FillerTower;
   palette: SkyPalette;
 }) {
-  const glowRef = useRef<THREE.Mesh>(null);
-  const crownRef = useRef<THREE.Mesh>(null);
-
-  useFrame((state) => {
-    if (!glowRef.current) {
-      return;
-    }
-
-    const material = glowRef.current.material as THREE.MeshStandardMaterial;
-    const pulse = 0.95 + Math.sin(state.clock.elapsedTime * 0.85 + tower.x * 0.07) * 0.05;
-    const targetGlow = palette.isNight
-      ? (0.09 + tower.lightStrength * 0.95) * pulse
-      : tower.lightStrength * 0.02;
-
-    material.emissiveIntensity = THREE.MathUtils.lerp(
-      material.emissiveIntensity,
-      targetGlow,
-      0.08,
-    );
-
-    if (crownRef.current) {
-      const crownMaterial = crownRef.current.material as THREE.MeshStandardMaterial;
-      const crownGlow = palette.isNight
-        ? 0.08 + tower.lightStrength * 0.62 * pulse
-        : 0.05 + tower.lightStrength * 0.24 * pulse;
-
-      crownMaterial.emissiveIntensity = THREE.MathUtils.lerp(
-        crownMaterial.emissiveIntensity,
-        crownGlow,
-        0.08,
-      );
-    }
-  });
+  const glow = palette.isNight ? 0.08 + tower.lightStrength * 0.72 : tower.lightStrength * 0.04;
+  const crownGlow = palette.isNight ? 0.08 + tower.lightStrength * 0.44 : 0.05 + tower.lightStrength * 0.16;
 
   return (
     <group position={[tower.x, 0, tower.z]}>
@@ -578,36 +471,36 @@ function FillerBuilding({
         />
       </mesh>
 
-      <mesh ref={glowRef} position={[0, tower.height / 2, 0]} renderOrder={2}>
+      <mesh position={[0, tower.height / 2, 0]} renderOrder={2}>
         <boxGeometry
           args={[tower.width * 0.72, Math.max(tower.height - 1.6, 2), tower.depth * 0.72]}
         />
         <meshStandardMaterial
           color={tower.color}
           emissive={tower.color}
-          emissiveIntensity={0.03}
+          emissiveIntensity={glow}
           transparent
           depthWrite={false}
-          opacity={palette.isNight ? 0.28 : 0.09}
+          opacity={palette.isNight ? 0.22 : 0.08}
         />
       </mesh>
 
-      <mesh ref={crownRef} position={[0, tower.height * 0.84, 0]} renderOrder={3}>
+      <mesh position={[0, tower.height * 0.84, 0]} renderOrder={3}>
         <boxGeometry
           args={[tower.width * 0.82, Math.max(tower.height * 0.032, 0.9), tower.depth * 0.82]}
         />
         <meshStandardMaterial
           color={tower.color}
           emissive={tower.color}
-          emissiveIntensity={0.08}
+          emissiveIntensity={crownGlow}
           transparent
           depthWrite={false}
-          opacity={palette.isNight ? 0.5 : 0.22}
+          opacity={palette.isNight ? 0.42 : 0.18}
         />
       </mesh>
     </group>
   );
-}
+});
 
 function SceneContent({
   repos,
@@ -618,7 +511,9 @@ function SceneContent({
   onClearSelection,
   scene,
 }: SceneContentProps) {
-  const fillerTowers = useMemo(() => buildFillerTowers(scene), [scene]);
+  const performanceMode = repos.length >= 180;
+  const fillerDensity = performanceMode ? 0.42 : 0.78;
+  const fillerTowers = useMemo(() => buildFillerTowers(scene, fillerDensity), [fillerDensity, scene]);
 
   return (
     <>
@@ -709,25 +604,28 @@ function SceneContent({
         />
       ))}
 
-      {palette.dayFactor < 0.58 ? (
+      {palette.dayFactor < 0.58 && !performanceMode ? (
         <Stars
-          count={1600}
+          count={420}
           depth={Math.max(420, scene.extent * 0.75)}
-          factor={4}
+          factor={3}
           fade
           radius={Math.max(280, scene.extent * 0.52)}
           saturation={0}
-          speed={0.2}
+          speed={0}
         />
       ) : null}
 
       <OrbitControls
         enablePan={false}
+        enableDamping={false}
         maxDistance={Math.max(12000, scene.extent * 4.8)}
         maxPolarAngle={Math.PI / 2.08}
         minDistance={28}
         minPolarAngle={Math.PI / 5.8}
+        rotateSpeed={0.58}
         target={[scene.centerX, 30, scene.centerZ]}
+        zoomSpeed={0.72}
       />
     </>
   );
@@ -751,7 +649,9 @@ export function SkylineScene(props: SkylineSceneProps) {
         ],
         far: Math.max(12000, scene.extent * 6),
       }}
-      gl={{ antialias: true, alpha: true }}
+      dpr={[0.66, 1]}
+      frameloop="demand"
+      gl={{ antialias: false, alpha: true, powerPreference: "high-performance" }}
     >
       <SceneContent {...props} scene={scene} />
     </Canvas>
