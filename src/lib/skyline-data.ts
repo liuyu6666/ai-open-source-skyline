@@ -15,6 +15,11 @@ export type DistrictRecord = {
   color: string;
   center: { x: number; z: number };
   size: { width: number; depth: number };
+  angleStart?: number;
+  angleEnd?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  labelRadius?: number;
 };
 
 export type RepoRecord = {
@@ -23,6 +28,12 @@ export type RepoRecord = {
   name: string;
   owner: string;
   description: Record<Locale, string>;
+  tagline?: Record<Locale, string>;
+  summary?: Record<Locale, string>;
+  capabilities?: Record<Locale, string[]>;
+  useCases?: Record<Locale, string[]>;
+  keywords?: string[];
+  summaryConfidence?: number;
   domain: DomainKey;
   color: string;
   totalStars: number;
@@ -123,6 +134,22 @@ const computeTowerHeight = (totalStars: number, maxStars: number) => {
   return Math.max(
     skylineTower.minHeight,
     (Math.max(totalStars, 0) / maxStars) * skylineTower.maxHeight,
+  );
+};
+
+const clamp01 = (value: number) => Math.min(Math.max(value, 0), 1);
+
+const computeLightStrength = (repo: RawRepo) => {
+  const momentumFactor = clamp01(Math.log1p(repo.starDelta7d) / Math.log1p(40));
+
+  return Number(
+    Math.min(
+      Math.max(
+        0.12 + momentumFactor * 0.96,
+        0.12,
+      ),
+      1.08,
+    ).toFixed(2),
   );
 };
 
@@ -509,6 +536,44 @@ const rawRepos: RawRepo[] = [
   },
 ];
 
+const allowedLotOverlapRatio = 0.1;
+
+const getLotOverlap = (
+  left: Pick<RepoRecord, "lotDepth" | "lotWidth" | "x" | "z">,
+  right: Pick<RepoRecord, "lotDepth" | "lotWidth" | "x" | "z">,
+) => {
+  const leftMinX = left.x - left.lotWidth * 0.5;
+  const leftMaxX = left.x + left.lotWidth * 0.5;
+  const rightMinX = right.x - right.lotWidth * 0.5;
+  const rightMaxX = right.x + right.lotWidth * 0.5;
+  const leftMinZ = left.z - left.lotDepth * 0.5;
+  const leftMaxZ = left.z + left.lotDepth * 0.5;
+  const rightMinZ = right.z - right.lotDepth * 0.5;
+  const rightMaxZ = right.z + right.lotDepth * 0.5;
+  const overlapX = Math.min(leftMaxX, rightMaxX) - Math.max(leftMinX, rightMinX);
+  const overlapZ = Math.min(leftMaxZ, rightMaxZ) - Math.max(leftMinZ, rightMinZ);
+
+  if (overlapX <= 0 || overlapZ <= 0) {
+    return null;
+  }
+
+  const overlapArea = overlapX * overlapZ;
+  const minArea = Math.min(left.lotWidth * left.lotDepth, right.lotWidth * right.lotDepth);
+  const allowedArea = minArea * allowedLotOverlapRatio;
+
+  if (overlapArea <= allowedArea) {
+    return null;
+  }
+
+  return {
+    overlapArea,
+    overlapX,
+    overlapZ,
+    pushX: Math.min(overlapX, (overlapArea - allowedArea) / Math.max(overlapZ, 0.001) + 0.22),
+    pushZ: Math.min(overlapZ, (overlapArea - allowedArea) / Math.max(overlapX, 0.001) + 0.22),
+  };
+};
+
 const districtIndex = new Map(districts.map((district) => [district.id, district]));
 const curatedLiveRepoSeeds = rawRepos
   .filter((repo) => repo.fullName !== "mshumer/WebVoyager")
@@ -657,7 +722,7 @@ const createLotOffsets = (district: DistrictRecord, count: number) => {
 const resolveRepoSpacing = (repos: RepoRecord[]) => {
   const positioned = repos.map((repo) => ({ ...repo }));
 
-  for (let iteration = 0; iteration < 18; iteration += 1) {
+  for (let iteration = 0; iteration < 32; iteration += 1) {
     let moved = false;
 
     for (let leftIndex = 0; leftIndex < positioned.length; leftIndex += 1) {
@@ -669,49 +734,59 @@ const resolveRepoSpacing = (repos: RepoRecord[]) => {
         const rightDistrict = districtIndex.get(right.domain)!;
         const dx = right.x - left.x;
         const dz = right.z - left.z;
-        const distance = Math.hypot(dx, dz) || 0.001;
-        const leftSpan = Math.max(left.lotWidth, left.lotDepth);
-        const rightSpan = Math.max(right.lotWidth, right.lotDepth);
-        const minimumDistance = Math.max((leftSpan + rightSpan) * 0.5, 15.5);
+        const overlap = getLotOverlap(left, right);
 
-        if (distance >= minimumDistance) {
+        if (!overlap) {
           continue;
         }
 
-        const push = (minimumDistance - distance) * 0.5;
-        let normalX = dx / distance;
-        let normalZ = dz / distance;
+        const leftPaddingX = leftDistrict.size.width * 0.46;
+        const leftPaddingZ = leftDistrict.size.depth * 0.46;
+        const rightPaddingX = rightDistrict.size.width * 0.46;
+        const rightPaddingZ = rightDistrict.size.depth * 0.46;
+        const useXAxis = overlap.pushX <= overlap.pushZ;
+        const directionX =
+          Math.abs(dx) < 0.001
+            ? Math.sign(Math.cos((leftIndex * 0.73 + rightIndex * 0.41) % (Math.PI * 2))) || 1
+            : Math.sign(dx);
+        const directionZ =
+          Math.abs(dz) < 0.001
+            ? Math.sign(Math.sin((leftIndex * 0.73 + rightIndex * 0.41) % (Math.PI * 2))) || 1
+            : Math.sign(dz);
 
-        if (Math.abs(dx) < 0.001 && Math.abs(dz) < 0.001) {
-          const angle = (leftIndex * 0.73 + rightIndex * 0.41) % (Math.PI * 2);
-          normalX = Math.cos(angle);
-          normalZ = Math.sin(angle);
+        if (useXAxis) {
+          const shift = overlap.pushX * 0.5;
+          left.x = Number(
+            clamp(
+              left.x - directionX * shift,
+              leftDistrict.center.x - leftPaddingX,
+              leftDistrict.center.x + leftPaddingX,
+            ).toFixed(1),
+          );
+          right.x = Number(
+            clamp(
+              right.x + directionX * shift,
+              rightDistrict.center.x - rightPaddingX,
+              rightDistrict.center.x + rightPaddingX,
+            ).toFixed(1),
+          );
+        } else {
+          const shift = overlap.pushZ * 0.5;
+          left.z = Number(
+            clamp(
+              left.z - directionZ * shift,
+              leftDistrict.center.z - leftPaddingZ,
+              leftDistrict.center.z + leftPaddingZ,
+            ).toFixed(1),
+          );
+          right.z = Number(
+            clamp(
+              right.z + directionZ * shift,
+              rightDistrict.center.z - rightPaddingZ,
+              rightDistrict.center.z + rightPaddingZ,
+            ).toFixed(1),
+          );
         }
-        const leftPaddingX = leftDistrict.size.width * 0.42;
-        const leftPaddingZ = leftDistrict.size.depth * 0.42;
-        const rightPaddingX = rightDistrict.size.width * 0.42;
-        const rightPaddingZ = rightDistrict.size.depth * 0.42;
-
-        left.x = Number(
-          clamp(left.x - normalX * push, leftDistrict.center.x - leftPaddingX, leftDistrict.center.x + leftPaddingX).toFixed(1),
-        );
-        left.z = Number(
-          clamp(left.z - normalZ * push, leftDistrict.center.z - leftPaddingZ, leftDistrict.center.z + leftPaddingZ).toFixed(1),
-        );
-        right.x = Number(
-          clamp(
-            right.x + normalX * push,
-            rightDistrict.center.x - rightPaddingX,
-            rightDistrict.center.x + rightPaddingX,
-          ).toFixed(1),
-        );
-        right.z = Number(
-          clamp(
-            right.z + normalZ * push,
-            rightDistrict.center.z - rightPaddingZ,
-            rightDistrict.center.z + rightPaddingZ,
-          ).toFixed(1),
-        );
         moved = true;
       }
     }
@@ -765,7 +840,6 @@ const buildSkylineSnapshot = (
     });
   }
 
-  const maxUpdates = Math.max(1, ...sourceRepos.map((repo) => repo.updateEvents7d));
   const maxStars = Math.max(1, ...sourceRepos.map((repo) => repo.totalStars));
 
   const repos = scoredRepos.map(({ repo, score }) => {
@@ -789,7 +863,7 @@ const buildSkylineSnapshot = (
       lotWidth: Number((width + 7.2).toFixed(1)),
       lotDepth: Number((depth + 7.6).toFixed(1)),
       height: Number(height.toFixed(1)),
-      lightStrength: Number((repo.updateEvents7d / maxUpdates).toFixed(2)),
+      lightStrength: computeLightStrength(repo),
       x: lot.x,
       z: lot.z,
     };

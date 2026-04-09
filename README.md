@@ -1,4 +1,4 @@
-# GitHub Skyline MVP
+# GithubStars Skyline
 
 一个把 GitHub 公共仓库宇宙压成 3D 天际线的发现型 MVP。
 

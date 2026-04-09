@@ -1,7 +1,7 @@
 {
-  "name": "github-intre",
+  "name": "githubstars-skyline",
   "version": "1.0.0",
-  "description": "GitHub skyline radar with a 30-day materialized repository catalog.",
+  "description": "GithubStars Skyline: a 3D city for tracking GitHub repository stars and momentum.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -15,9 +15,9 @@ const monoFont = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GitHub Skyline Radar",
+  title: "GithubStars Skyline",
   description:
-    "A GitHub discovery MVP for AI projects, with a 3D skyline, day-night cycle, and update-driven building lights.",
+    "GithubStars Skyline is a 3D city for tracking GitHub repository stars, momentum, and movement over time.",
 };
 
 export default function RootLayout({
@@ -31,4 +31,3 @@ export default function RootLayout({
     </html>
   );
 }
-
