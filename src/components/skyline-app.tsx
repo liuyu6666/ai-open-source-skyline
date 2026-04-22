@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { startTransition, useDeferredValue, useEffect, useEffectEvent, useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import {
   formatGeneratedAt,
@@ -110,17 +110,25 @@ function StatTile({
   label,
   value,
   note,
+  onClick,
 }: {
   label: string;
   value: string;
   note: string;
+  onClick?: () => void;
 }) {
+  const Component = onClick ? "button" : "div";
+
   return (
-    <div className="glass stat-tile">
+    <Component
+      className={`glass stat-tile${onClick ? " interactive" : ""}`}
+      onClick={onClick}
+      type={onClick ? "button" : undefined}
+    >
       <span className="eyebrow">{label}</span>
       <strong>{value}</strong>
       <small>{note}</small>
-    </div>
+    </Component>
   );
 }
 
@@ -169,8 +177,13 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
   const [isRadarOpen, setIsRadarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeDomain, setActiveDomain] = useState<DomainKey | "all">("all");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const controlPanelRef = useRef<HTMLElement>(null);
+  const radarToggleRef = useRef<HTMLButtonElement>(null);
   const deferredQuery = useDeferredValue(searchQuery.trim().toLowerCase());
   const palette = getSkyPalette(now, locale);
+  const subtitle = snapshot.demoMode ? copy.demoSubtitle : copy.liveSubtitle;
+  const mobileSubtitle = snapshot.demoMode ? copy.mobileDemoSubtitle : copy.mobileLiveSubtitle;
 
   const districtLabels = useMemo(
     () =>
@@ -218,6 +231,12 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
   const hasActiveFilters = activeDomain !== "all" || deferredQuery.length > 0;
   const selectedRepo =
     selectedId === null ? null : snapshot.repos.find((repo) => repo.id === selectedId) ?? null;
+  const selectedRepoHref = selectedRepo ? `https://github.com/${selectedRepo.fullName}` : null;
+  const selectedRepoTagline = selectedRepo?.tagline?.[locale] ?? "";
+  const selectedRepoSummary = selectedRepo?.summary?.[locale] ?? selectedRepo?.description[locale] ?? "";
+  const selectedRepoCapabilities = selectedRepo?.capabilities?.[locale] ?? [];
+  const selectedRepoUseCases = selectedRepo?.useCases?.[locale] ?? [];
+  const selectedRepoKeywords = selectedRepo?.keywords ?? [];
   const districts = useMemo(
     () =>
       snapshot.districts.map((district) => ({
@@ -231,6 +250,24 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
     setNow(new Date());
   });
 
+  const handleOutsideRadarPointer = useEffectEvent((event: PointerEvent) => {
+    if (!isRadarOpen) {
+      return;
+    }
+
+    const target = event.target;
+
+    if (!(target instanceof Node)) {
+      return;
+    }
+
+    if (controlPanelRef.current?.contains(target) || radarToggleRef.current?.contains(target)) {
+      return;
+    }
+
+    closeRadar();
+  });
+
   useEffect(() => {
     setIsMounted(true);
     setNow(new Date());
@@ -242,6 +279,18 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
 
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!isRadarOpen) {
+      return;
+    }
+
+    document.addEventListener("pointerdown", handleOutsideRadarPointer, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsideRadarPointer, true);
+    };
+  }, [isRadarOpen]);
 
   useEffect(() => {
     if (selectedId && !filteredRepos.some((repo) => repo.id === selectedId)) {
@@ -273,13 +322,55 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
           setSelectedId(null);
         }
       });
+    } catch (error) {
+      console.warn("Failed to refresh skyline snapshot", error);
     } finally {
       setIsRefreshing(false);
     }
   };
 
+  const clearRadarFilters = () => {
+    setSearchQuery("");
+    setActiveDomain("all");
+  };
+
+  const closeRadar = () => {
+    clearRadarFilters();
+    setIsRadarOpen(false);
+  };
+
+  const focusRepoInRadar = (repoId: string | null) => {
+    if (!repoId) {
+      return;
+    }
+
+    const targetRepo = snapshot.repos.find((repo) => repo.id === repoId);
+
+    if (!targetRepo) {
+      return;
+    }
+
+    setIsRadarOpen(true);
+    setActiveDomain("all");
+    setSearchQuery(targetRepo.fullName);
+    setSelectedId(targetRepo.id);
+
+    window.setTimeout(() => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }, 140);
+  };
+
+  const selectRepoFromRadar = (repoId: string) => {
+    setSelectedId(repoId);
+
+    if (typeof window !== "undefined" && window.innerWidth <= 920) {
+      setIsRadarOpen(false);
+    }
+  };
+
   return (
-    <main className="page-shell">
+    <main className={`page-shell${selectedRepo ? " has-selection" : ""}${isRadarOpen ? " has-radar-open" : ""}`}>
       <div className="skyline-backdrop">
         <SkylineScene
           districts={districts}
@@ -295,25 +386,43 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
         <section className="top-hud">
           <div className="brand-panel">
             <span className="eyebrow">{copy.brand}</span>
-            <h1>{copy.title}</h1>
-            <p>{snapshot.demoMode ? copy.demoSubtitle : copy.liveSubtitle}</p>
+            <h1>
+              <span className="title-desktop">{copy.title}</span>
+              <span className="title-mobile">{copy.mobileTitle}</span>
+            </h1>
+            <p>
+              <span className="subtitle-desktop">{subtitle}</span>
+              <span className="subtitle-mobile">{mobileSubtitle}</span>
+            </p>
 
             <div className="brand-actions">
               <button
                 aria-expanded={isRadarOpen}
                 className="ghost-link radar-toggle"
-                onClick={() => setIsRadarOpen((open) => !open)}
+                ref={radarToggleRef}
+                onClick={() => {
+                  if (isRadarOpen) {
+                    closeRadar();
+                    return;
+                  }
+
+                  setIsRadarOpen(true);
+                }}
                 type="button"
               >
                 {isRadarOpen ? copy.controls.closeRadar : copy.controls.openRadar}
               </button>
             </div>
 
-            <section className={`glass control-panel${isRadarOpen ? " open" : ""}`}>
+            <section
+              ref={controlPanelRef}
+              className={`glass control-panel${isRadarOpen ? " open" : ""}`}
+            >
               <div className="control-header">
                 <label className="search-shell">
                   <span className="eyebrow">Radar</span>
                   <input
+                    ref={searchInputRef}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder={copy.controls.searchPlaceholder}
                     type="search"
@@ -325,10 +434,7 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
                   {hasActiveFilters ? (
                     <button
                       className="ghost-link control-clear"
-                      onClick={() => {
-                        setSearchQuery("");
-                        setActiveDomain("all");
-                      }}
+                      onClick={clearRadarFilters}
                       type="button"
                     >
                       {copy.controls.clear}
@@ -337,7 +443,7 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
 
                   <button
                     className="ghost-link control-close"
-                    onClick={() => setIsRadarOpen(false)}
+                    onClick={closeRadar}
                     type="button"
                   >
                     {copy.drawer.close}
@@ -394,7 +500,7 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
                       active={selectedId === repo.id}
                       label={repo.fullName}
                       note={`${formatNumber(repo.totalStars, locale)} ${copy.drawer.totalStars}`}
-                      onClick={() => setSelectedId(repo.id)}
+                      onClick={() => selectRepoFromRadar(repo.id)}
                     />
                   ))
                 ) : (
@@ -431,6 +537,7 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
                 note={
                   topMover ? `+${formatNumber(topMover.starDelta7d, locale)} / 7d` : copy.emptyValue
                 }
+                onClick={topMover ? () => focusRepoInRadar(topMover.id) : undefined}
                 value={topMover?.name ?? copy.emptyValue}
               />
               <StatTile
@@ -438,16 +545,23 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
                 note={
                   newestRepo ? formatRelativeDays(newestRepo.createdDaysAgo, locale) : copy.emptyValue
                 }
+                onClick={newestRepo ? () => focusRepoInRadar(newestRepo.id) : undefined}
                 value={newestRepo?.name ?? copy.emptyValue}
               />
             </section>
 
             <div className="top-actions">
               <button className="action-button" disabled={isRefreshing} onClick={refreshSnapshot} type="button">
-                {isRefreshing ? copy.refreshing : copy.refresh}
+                <span className="action-label-desktop">
+                  {isRefreshing ? copy.refreshing : copy.refresh}
+                </span>
+                <span className="action-label-mobile">
+                  {isRefreshing ? copy.mobileRefreshing : copy.mobileRefresh}
+                </span>
               </button>
               <Link className="ghost-link" href={copy.switchHref}>
-                {copy.switchLabel}
+                <span className="action-label-desktop">{copy.switchLabel}</span>
+                <span className="action-label-mobile">{copy.mobileSwitchLabel}</span>
               </Link>
               <div className="clock-pill">
                 <span>{palette.phaseLabel}</span>
@@ -473,62 +587,131 @@ export function SkylineApp({ initialSnapshot, locale }: SkylineAppProps) {
       </div>
 
       {selectedRepo ? (
-        <aside className="glass detail-drawer">
-          <div className="drawer-head">
-            <div>
-              <span className="eyebrow">{copy.drawer.repoDetail}</span>
-              <h2>{selectedRepo.name}</h2>
-              <small>{selectedRepo.fullName}</small>
+        <>
+          <button
+            aria-label={copy.drawer.close}
+            className="drawer-scrim"
+            onClick={() => setSelectedId(null)}
+            type="button"
+          />
+
+          <aside className="glass detail-drawer">
+            <div className="drawer-head">
+              <div>
+                <span className="eyebrow">{copy.drawer.repoDetail}</span>
+                <h2>{selectedRepo.name}</h2>
+                <small>{selectedRepo.fullName}</small>
+                {selectedRepoHref ? (
+                  <a
+                    className="repo-link"
+                    href={selectedRepoHref}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {copy.drawer.openRepo}
+                  </a>
+                ) : null}
+              </div>
+
+              <button className="drawer-close" onClick={() => setSelectedId(null)} type="button">
+                <span className="drawer-close-label">{copy.drawer.close}</span>
+                <span aria-hidden="true" className="drawer-close-icon">×</span>
+              </button>
             </div>
 
-            <button className="drawer-close" onClick={() => setSelectedId(null)} type="button">
-              {copy.drawer.close}
-            </button>
-          </div>
+            <div className="detail-drawer-scroll">
+              <div className="detail-drawer-body">
+                {selectedRepoTagline ? (
+                  <p className="detail-tagline">{selectedRepoTagline}</p>
+                ) : null}
 
-          <p className="detail-copy">{selectedRepo.description[locale]}</p>
+                <div className="summary-section secondary snapshot-note-block">
+                  <span className="eyebrow">{copy.drawer.snapshotNote}</span>
+                  <p className="detail-copy compact">{selectedRepo.description[locale]}</p>
+                </div>
 
-          <div className="meta-pills">
-            <span>{copy.domainLabels[selectedRepo.domain]}</span>
-            <span>{snapshot.demoMode ? copy.drawer.demo : copy.drawer.live}</span>
-            <span>{formatGeneratedAt(snapshot.generatedAt, locale)}</span>
-          </div>
+                <div className="summary-section">
+                  <span className="eyebrow">{copy.drawer.readmeDigest}</span>
+                  <p className="detail-copy">{selectedRepoSummary}</p>
+                </div>
 
-          <div className="detail-grid">
-            <div className="metric-box">
-              <span>{copy.drawer.totalStars}</span>
-              <strong>{formatNumber(selectedRepo.totalStars, locale)}</strong>
-            </div>
-            <div className="metric-box">
-              <span>{copy.drawer.starDelta7d}</span>
-              <strong>+{formatNumber(selectedRepo.starDelta7d, locale)}</strong>
-            </div>
-            <div className="metric-box">
-              <span>{copy.drawer.updateEvents}</span>
-              <strong>{formatNumber(selectedRepo.updateEvents7d, locale)}</strong>
-            </div>
-            <div className="metric-box">
-              <span>{copy.drawer.contributors}</span>
-              <strong>{formatNumber(selectedRepo.contributors30d, locale)}</strong>
-            </div>
-          </div>
+                {selectedRepoCapabilities.length ? (
+                  <section className="summary-section">
+                    <span className="eyebrow">{copy.drawer.capabilities}</span>
+                    <ul className="summary-list">
+                      {selectedRepoCapabilities.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
 
-          <div className="signal-panel">
-            <div>
-              <span className="eyebrow">{copy.drawer.dailyPulse}</span>
-              <Sparkline points={selectedRepo.trend} />
-            </div>
+                {selectedRepoUseCases.length ? (
+                  <section className="summary-section">
+                    <span className="eyebrow">{copy.drawer.useCases}</span>
+                    <ul className="summary-list">
+                      {selectedRepoUseCases.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
 
-            <div className="signal-copy">
-              <span>{copy.drawer.created}</span>
-              <strong>{formatRelativeDays(selectedRepo.createdDaysAgo, locale)}</strong>
-              <span>{copy.drawer.lastPush}</span>
-              <strong>{formatHoursAgo(selectedRepo.lastPushHoursAgo, locale)}</strong>
-              <span>{copy.drawer.mixedScore}</span>
-              <strong>{selectedRepo.score.toFixed(1)}</strong>
+                {selectedRepoKeywords.length ? (
+                  <section className="summary-section">
+                    <span className="eyebrow">{copy.drawer.keywords}</span>
+                    <div className="summary-keywords">
+                      {selectedRepoKeywords.map((item) => (
+                        <span key={item}>{item}</span>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                <div className="meta-pills">
+                  <span>{copy.domainLabels[selectedRepo.domain]}</span>
+                  <span>{snapshot.demoMode ? copy.drawer.demo : copy.drawer.live}</span>
+                  <span>{formatGeneratedAt(snapshot.generatedAt, locale)}</span>
+                </div>
+
+                <div className="detail-grid">
+                  <div className="metric-box">
+                    <span>{copy.drawer.totalStars}</span>
+                    <strong>{formatNumber(selectedRepo.totalStars, locale)}</strong>
+                  </div>
+                  <div className="metric-box">
+                    <span>{copy.drawer.starDelta7d}</span>
+                    <strong>+{formatNumber(selectedRepo.starDelta7d, locale)}</strong>
+                  </div>
+                  <div className="metric-box">
+                    <span>{copy.drawer.updateEvents}</span>
+                    <strong>{formatNumber(selectedRepo.updateEvents7d, locale)}</strong>
+                  </div>
+                  <div className="metric-box">
+                    <span>{copy.drawer.contributors}</span>
+                    <strong>{formatNumber(selectedRepo.contributors30d, locale)}</strong>
+                  </div>
+                </div>
+
+                <div className="signal-panel">
+                  <div>
+                    <span className="eyebrow">{copy.drawer.dailyPulse}</span>
+                    <Sparkline points={selectedRepo.trend} />
+                  </div>
+
+                  <div className="signal-copy">
+                    <span>{copy.drawer.created}</span>
+                    <strong>{formatRelativeDays(selectedRepo.createdDaysAgo, locale)}</strong>
+                    <span>{copy.drawer.lastPush}</span>
+                    <strong>{formatHoursAgo(selectedRepo.lastPushHoursAgo, locale)}</strong>
+                    <span>{copy.drawer.mixedScore}</span>
+                    <strong>{selectedRepo.score.toFixed(1)}</strong>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </aside>
+          </aside>
+        </>
       ) : (
         <aside className="glass detail-hint">
           <span className="eyebrow">{copy.drawer.repoDetail}</span>

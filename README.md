@@ -1,6 +1,6 @@
-# GitHub Skyline MVP
+# GithubStars Skyline
 
-一个把 GitHub 公共仓库宇宙压成 3D 天际线的发现型 MVP。
+一个把 GitHub 公共仓库宇宙压成 3D 天际线的发现型项目。
 
 当前版本重点验证两件事：
 
@@ -12,7 +12,9 @@
 ```bash
 npm install
 cp .env.example .env.local
-# GITHUB_TOKEN 用于补全仓库元数据；不填仍可跑 demo / 已有快照
+# GITHUB_TOKEN 用于补全仓库元数据
+# DEEPSEEK_API_KEY 用于给入图仓库生成 README 摘要
+# 不填仍可跑 demo / 已有快照，只是不会生成摘要
 npm run dev
 ```
 
@@ -20,7 +22,7 @@ npm run dev
 
 ## 30 天数据管线
 
-现在的真实数据主链路分成 4 步：
+现在的真实数据主链路分成 5 步：
 
 1. `npm run db:schema`
 - 初始化本地 SQLite 数据库 `data/skyline.sqlite`
@@ -40,6 +42,12 @@ npm run dev
 - 物化到 `data/skyline-snapshot.json`
 - 页面优先读取这份快照，没有才回退到旧的轻量 live/demo 逻辑
 
+5. `npm run db:summary:sync`
+- 只处理当前 snapshot 里的入图仓库
+- 用 GitHub API 拉 README
+- 仅当 README SHA 变化时才重新调用 DeepSeek
+- 生成双语结构化摘要，下一次 `db:snapshot` 会把这些字段带进详情抽屉
+
 一条命令串起来：
 
 ```bash
@@ -52,7 +60,7 @@ npm run db:bootstrap:30d
 
 - `GH Archive` 负责全站公共事件发现与日级增量
 - `GitHub API` 负责 repo 元数据补全
-- 只有未来要补 README 外部站点语义时，才需要少量 crawler
+- `DeepSeek` 只负责对当前入图仓库做 README 总结
 
 这条链路更稳，也更适合“每天至少更新一次”的目标。
 
@@ -66,6 +74,17 @@ npm run db:bootstrap:30d
 - `created_in_30d && total_stars >= 30`
 
 然后再按混合分数取前 `420` 个仓库进入城市。
+
+## README 摘要
+
+README 摘要默认只处理“当前已经进入地图”的仓库，而不是全库：
+
+- 抓取表：`skyline_repo_readmes`
+- 摘要表：`skyline_repo_summaries`
+- 模型：`deepseek-chat`
+- 策略：只在 `README SHA` 变化时重算
+
+这样可以把模型成本压到很低，同时让详情抽屉里的简介、能力点和使用场景比模板文案更有信息量。
 
 ## 数据落地
 

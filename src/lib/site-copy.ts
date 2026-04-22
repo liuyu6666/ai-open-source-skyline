@@ -6,11 +6,17 @@ type SiteCopy = {
   timeLocale: string;
   brand: string;
   title: string;
+  mobileTitle: string;
   demoSubtitle: string;
+  mobileDemoSubtitle: string;
   liveSubtitle: string;
+  mobileLiveSubtitle: string;
   refresh: string;
   refreshing: string;
+  mobileRefresh: string;
+  mobileRefreshing: string;
   switchLabel: string;
+  mobileSwitchLabel: string;
   switchHref: string;
   browserTimeFallback: string;
   emptyValue: string;
@@ -46,10 +52,16 @@ type SiteCopy = {
   drawer: {
     repoDetail: string;
     close: string;
+    openRepo: string;
     demo: string;
     live: string;
     emptyTitle: string;
     emptyBody: string;
+    readmeDigest: string;
+    snapshotNote: string;
+    capabilities: string;
+    useCases: string;
+    keywords: string;
     totalStars: string;
     starDelta7d: string;
     updateEvents: string;
@@ -65,15 +77,21 @@ type SiteCopy = {
 const siteCopy: Record<SupportedLocale, SiteCopy> = {
   zh: {
     timeLocale: "zh-CN",
-    brand: "GitHub 天际线图谱",
-    title: "把快速变化的 GitHub 仓库做成一座可观察的 3D 城市。",
+    brand: "GithubStars Skyline",
+    title: "GithubStars Skyline",
+    mobileTitle: "GithubStars Skyline",
     demoSubtitle:
       "当前仍在回退示例快照，用来保证界面和交互可用；一旦 30 天物化快照生成成功，页面会自动切到真实仓库城市。",
+    mobileDemoSubtitle: "当前优先展示示例快照，30 天真实快照生成后会自动切换。",
     liveSubtitle:
       "当前优先读取 30 天 GH Archive + GitHub API 物化快照；没有快照时才回退到轻量 API 采样。",
+    mobileLiveSubtitle: "30 天 GH Archive + GitHub API 真实快照。",
     refresh: "刷新快照",
     refreshing: "刷新中…",
+    mobileRefresh: "刷新",
+    mobileRefreshing: "刷新中",
     switchLabel: "切换到英文版",
+    mobileSwitchLabel: "EN",
     switchHref: "/en",
     browserTimeFallback: "浏览器时间",
     emptyValue: "暂无",
@@ -108,7 +126,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       },
       updates: {
         label: "7 日更新事件",
-        note: "夜间楼灯亮度的主要来源",
+        note: "用于衡量项目维护活跃度",
       },
       momentum: {
         label: "增长最快",
@@ -121,16 +139,22 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     },
     sceneLegend: {
       height: "楼高 = 总 star 线性比例",
-      lights: "夜灯 = 更新频率",
+      lights: "楼体亮度 = 7 日 star 涨幅",
       interaction: "点击楼体查看详情",
     },
     drawer: {
       repoDetail: "仓库详情",
       close: "关闭",
+      openRepo: "前往 GitHub",
       demo: "示例快照",
       live: "30 天快照",
       emptyTitle: "点击任意楼体",
       emptyBody: "右侧会展示对应仓库的描述、增量、活跃度和最近趋势。",
+      readmeDigest: "README 摘要",
+      snapshotNote: "快照统计说明",
+      capabilities: "核心能力",
+      useCases: "适用场景",
+      keywords: "关键词",
       totalStars: "总 star",
       starDelta7d: "7 日 star 增量",
       updateEvents: "7 日更新事件",
@@ -150,15 +174,22 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
   },
   en: {
     timeLocale: "en-US",
-    brand: "GitHub Skyline Atlas",
-    title: "Turn fast-moving GitHub repos into a readable 3D city.",
+    brand: "GithubStars Skyline",
+    title: "GithubStars Skyline",
+    mobileTitle: "GithubStars Skyline",
     demoSubtitle:
       "The app is still falling back to demo snapshots when no catalog exists; once the 30-day materialized snapshot is ready, the city switches to real repositories automatically.",
+    mobileDemoSubtitle:
+      "The app is showing a fallback demo snapshot until the 30-day live city is ready.",
     liveSubtitle:
       "The app now prefers a 30-day materialized snapshot built from GH Archive plus GitHub API enrichment; the lightweight live sampler is only a fallback.",
+    mobileLiveSubtitle: "30-day live snapshot from GH Archive and GitHub API enrichment.",
     refresh: "Refresh snapshot",
     refreshing: "Refreshing…",
+    mobileRefresh: "Refresh",
+    mobileRefreshing: "Syncing",
     switchLabel: "Switch to Chinese",
+    mobileSwitchLabel: "中文",
     switchHref: "/zh",
     browserTimeFallback: "Browser time",
     emptyValue: "N/A",
@@ -193,7 +224,7 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
       },
       updates: {
         label: "Update events",
-        note: "Primary driver of nighttime tower glow",
+        note: "Maintenance activity signal over the last 7 days",
       },
       momentum: {
         label: "Fastest mover",
@@ -206,16 +237,22 @@ const siteCopy: Record<SupportedLocale, SiteCopy> = {
     },
     sceneLegend: {
       height: "Height = total stars, linearly scaled",
-      lights: "Night glow = update frequency",
+      lights: "Tower glow = 7-day star delta",
       interaction: "Click a tower for repo details",
     },
     drawer: {
       repoDetail: "Repo detail",
       close: "Close",
+      openRepo: "Open on GitHub",
       demo: "Demo snapshot",
       live: "30-day snapshot",
       emptyTitle: "Click any tower",
       emptyBody: "The right side will show its description, growth, maintenance signal, and recent pulse.",
+      readmeDigest: "README digest",
+      snapshotNote: "Snapshot note",
+      capabilities: "Capabilities",
+      useCases: "Use cases",
+      keywords: "Keywords",
       totalStars: "Total stars",
       starDelta7d: "Star delta 7d",
       updateEvents: "Update events 7d",

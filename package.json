@@ -1,7 +1,7 @@
 {
-  "name": "github-intre",
+  "name": "githubstars-skyline",
   "version": "1.0.0",
-  "description": "GitHub skyline radar with a 30-day materialized repository catalog.",
+  "description": "GithubStars Skyline: a 3D city for tracking GitHub repository stars and momentum.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,6 +11,14 @@
     "db:backfill:30d": "node scripts/skyline/backfill-gharchive.mjs --days=30",
     "db:enrich": "node scripts/skyline/enrich-repos.mjs",
     "db:enrich:catalog": "node scripts/skyline/enrich-catalog.mjs",
+    "db:enrich:loop": "node scripts/skyline/enrich-loop.mjs",
+    "db:health": "node scripts/skyline/health-check.mjs",
+    "db:readmes": "node scripts/skyline/fetch-readmes.mjs",
+    "db:recent-metrics": "node scripts/skyline/refresh-recent-metrics.mjs",
+    "db:recent-metrics:loop": "node scripts/skyline/recent-metrics-loop.mjs",
+    "db:summaries": "node scripts/skyline/summarize-readmes.mjs",
+    "db:summary:sync": "node scripts/skyline/sync-readme-summaries.mjs",
+    "db:summary:loop": "node scripts/skyline/summary-loop.mjs",
     "db:snapshot": "node scripts/skyline/materialize-snapshot.mjs",
     "db:bootstrap:30d": "node scripts/skyline/bootstrap-30d.mjs"
   },
