@@ -6,6 +6,8 @@ import {
   isMainModule,
   loadLocalEnv,
   openSkylineDatabase,
+  parseArgs,
+  runWithSqliteBusyRetry,
   setIngestionState,
   streamGhArchiveLines,
   withTransaction,
@@ -21,28 +23,6 @@ const updateEventTypes = new Set([
   "ReleaseEvent",
   "CreateEvent",
 ]);
-
-function parseArgs(argv = process.argv.slice(2)) {
-  const parsed = {};
-
-  for (const item of argv) {
-    if (!item.startsWith("--")) {
-      continue;
-    }
-
-    const body = item.slice(2);
-    const separatorIndex = body.indexOf("=");
-
-    if (separatorIndex === -1) {
-      parsed[body] = "true";
-      continue;
-    }
-
-    parsed[body.slice(0, separatorIndex)] = body.slice(separatorIndex + 1);
-  }
-
-  return parsed;
-}
 
 function createHourlyBucket(metricDate) {
   return {
@@ -310,14 +290,109 @@ function refreshContributorCounts(database, metricDates) {
 }
 
 function clearActorRows(database, metricDate) {
-  database
-    .prepare(
-      `
-        DELETE FROM skyline_repo_daily_actors
-        WHERE metric_date = ?
-      `,
-    )
-    .run(metricDate);
+  runWithSqliteBusyRetry(
+    () =>
+      database
+        .prepare(
+          `
+            DELETE FROM skyline_repo_daily_actors
+            WHERE metric_date = ?
+          `,
+        )
+        .run(metricDate),
+    {
+      label: `clear actors ${metricDate}`,
+    },
+  );
+}
+
+function clearMetricDate(database, metricDate) {
+  withTransaction(database, () => {
+    database
+      .prepare(
+        `
+          DELETE FROM skyline_repo_daily_actors
+          WHERE metric_date = ?
+        `,
+      )
+      .run(metricDate);
+
+    database
+      .prepare(
+        `
+          DELETE FROM skyline_repo_daily_metrics
+          WHERE metric_date = ?
+        `,
+      )
+      .run(metricDate);
+  });
+}
+
+function setGhArchiveDayState(database, metricDate, state) {
+  return runWithSqliteBusyRetry(
+    () =>
+      database
+        .prepare(
+          `
+            INSERT INTO skyline_gharchive_days (
+              metric_date,
+              status,
+              started_at,
+              completed_at,
+              event_rows,
+              repo_rows,
+              metric_rows,
+              actor_rows,
+              pruned_metrics,
+              pruned_repos,
+              error_message,
+              updated_at
+            )
+            VALUES (
+              $metricDate,
+              $status,
+              $startedAt,
+              $completedAt,
+              $eventRows,
+              $repoRows,
+              $metricRows,
+              $actorRows,
+              $prunedMetrics,
+              $prunedRepos,
+              $errorMessage,
+              CURRENT_TIMESTAMP
+            )
+            ON CONFLICT(metric_date) DO UPDATE SET
+              status = excluded.status,
+              started_at = COALESCE(excluded.started_at, skyline_gharchive_days.started_at),
+              completed_at = excluded.completed_at,
+              event_rows = excluded.event_rows,
+              repo_rows = excluded.repo_rows,
+              metric_rows = excluded.metric_rows,
+              actor_rows = excluded.actor_rows,
+              pruned_metrics = excluded.pruned_metrics,
+              pruned_repos = excluded.pruned_repos,
+              error_message = excluded.error_message,
+              updated_at = CURRENT_TIMESTAMP
+          `,
+        )
+        .run({
+          actorRows: state.actorRows ?? 0,
+          completedAt: state.completedAt ?? null,
+          errorMessage: state.errorMessage ?? null,
+          eventRows: state.eventRows ?? 0,
+          metricDate,
+          metricRows: state.metricRows ?? 0,
+          prunedMetrics: state.prunedMetrics ?? 0,
+          prunedRepos: state.prunedRepos ?? 0,
+          repoRows: state.repoRows ?? 0,
+          startedAt: state.startedAt ?? null,
+          status: state.status,
+        }),
+    {
+      label: `gharchive day ${metricDate}`,
+    },
+  );
 }
 
 function pruneDailyNoise(
@@ -328,32 +403,47 @@ function pruneDailyNoise(
     minDailyContributors = 3,
   } = {},
 ) {
-  const removedMetrics = database
-    .prepare(
-      `
-        DELETE FROM skyline_repo_daily_metrics
-        WHERE metric_date = ?
-          AND watch_events = 0
-          AND total_events < ?
-          AND contributors < ?
-          AND created_repo = 0
-      `,
-    )
-    .run(metricDate, minDailyEvents, minDailyContributors).changes;
+  let removedMetrics = 0;
+  let removedRepos = 0;
 
-  const removedRepos = database
-    .prepare(
-      `
-        DELETE FROM skyline_repos
-        WHERE full_name NOT IN (
-          SELECT DISTINCT repo_full_name
-          FROM skyline_repo_daily_metrics
-        )
-      `,
-    )
-    .run().changes;
+  withTransaction(database, () => {
+    removedMetrics = database
+      .prepare(
+        `
+          DELETE FROM skyline_repo_daily_metrics
+          WHERE metric_date = ?
+            AND watch_events = 0
+            AND total_events < ?
+            AND contributors < ?
+            AND created_repo = 0
+        `,
+      )
+      .run(metricDate, minDailyEvents, minDailyContributors).changes;
 
-  database.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+    removedRepos = database
+      .prepare(
+        `
+          DELETE FROM skyline_repos
+          WHERE full_name NOT IN (
+            SELECT DISTINCT repo_full_name
+            FROM skyline_repo_daily_metrics
+          )
+        `,
+      )
+      .run().changes;
+  });
+
+  try {
+    runWithSqliteBusyRetry(
+      () => database.exec("PRAGMA wal_checkpoint(PASSIVE);"),
+      {
+        label: `checkpoint after ${metricDate}`,
+        retries: 2,
+      },
+    );
+  } catch (error) {
+    console.warn(`Skipping WAL checkpoint after ${metricDate}`, error);
+  }
 
   return {
     removedMetrics,
@@ -361,38 +451,62 @@ function pruneDailyNoise(
   };
 }
 
-async function processHour(database, metricDate, hour) {
+async function processHour(database, metricDate, hour, { hourTimeoutMs } = {}) {
   const bucket = createHourlyBucket(metricDate);
+  const startedAt = Date.now();
+  let lastProgressAt = startedAt;
 
-  await streamGhArchiveLines(metricDate, hour, (line) => {
-    bucket.totals.eventRows += 1;
+  await streamGhArchiveLines(
+    metricDate,
+    hour,
+    (line) => {
+      bucket.totals.eventRows += 1;
 
-    try {
-      const event = JSON.parse(line);
-      recordEvent(bucket, event);
-    } catch (error) {
-      console.warn(`Skipping malformed GH Archive line for ${metricDate}-${hour}`, error);
-    }
-  });
+      const now = Date.now();
+
+      if (
+        bucket.totals.eventRows % 250_000 === 0 ||
+        now - lastProgressAt >= 30_000
+      ) {
+        console.log(
+          `Progress ${metricDate}-${hour}: events=${bucket.totals.eventRows} elapsedMs=${now - startedAt}`,
+        );
+        lastProgressAt = now;
+      }
+
+      try {
+        const event = JSON.parse(line);
+        recordEvent(bucket, event);
+      } catch (error) {
+        console.warn(`Skipping malformed GH Archive line for ${metricDate}-${hour}`, error);
+      }
+    },
+    {
+      timeoutMs: hourTimeoutMs,
+    },
+  );
 
   flushBucket(database, bucket);
+  console.log(
+    `Finished ${metricDate}-${hour}: events=${bucket.totals.eventRows} repos=${bucket.totals.repoRows} metrics=${bucket.totals.metricRows} actors=${bucket.totals.actorRows} elapsedMs=${Date.now() - startedAt}`,
+  );
 
   return bucket.totals;
 }
 
-export async function backfillGhArchive({
-  days = 30,
-  endDate,
-  hourLimit = null,
+export async function backfillGhArchiveDates({
+  metricDates,
   minDailyContributors = 3,
   minDailyEvents = 6,
+  hourLimit = null,
+  hourTimeoutMs = Number(process.env.GHARCHIVE_HOUR_TIMEOUT_MS ?? 30 * 60 * 1000),
+  replaceExisting = false,
 } = {}) {
   loadLocalEnv();
 
   const database = openSkylineDatabase();
   ensureSchema(database);
 
-  const metricDates = buildTrailingUtcDates(days, endDate).map(formatUtcDate);
   const startedAt = new Date().toISOString();
   const summary = {
     actorRows: 0,
@@ -404,6 +518,7 @@ export async function backfillGhArchive({
 
   try {
     for (const metricDate of metricDates) {
+      const dayStartedAt = new Date().toISOString();
       const daySummary = {
         actorRows: 0,
         eventRows: 0,
@@ -411,37 +526,67 @@ export async function backfillGhArchive({
         repoRows: 0,
       };
 
-      for (let hour = 0; hour < 24; hour += 1) {
-        if (hourLimit !== null && hour >= hourLimit) {
-          break;
+      try {
+        setGhArchiveDayState(database, metricDate, {
+          startedAt: dayStartedAt,
+          status: "running",
+        });
+
+        if (replaceExisting) {
+          clearMetricDate(database, metricDate);
         }
 
-        console.log(`Backfilling ${ghArchiveUrl(metricDate, hour)}`);
-        const totals = await processHour(database, metricDate, hour);
+        for (let hour = 0; hour < 24; hour += 1) {
+          if (hourLimit !== null && hour >= hourLimit) {
+            break;
+          }
 
-        summary.actorRows += totals.actorRows;
-        summary.eventRows += totals.eventRows;
-        summary.metricRows += totals.metricRows;
-        summary.repoRows += totals.repoRows;
-        daySummary.actorRows += totals.actorRows;
-        daySummary.eventRows += totals.eventRows;
-        daySummary.metricRows += totals.metricRows;
-        daySummary.repoRows += totals.repoRows;
+          console.log(`Backfilling ${ghArchiveUrl(metricDate, hour)}`);
+          const totals = await processHour(database, metricDate, hour, {
+            hourTimeoutMs,
+          });
+
+          summary.actorRows += totals.actorRows;
+          summary.eventRows += totals.eventRows;
+          summary.metricRows += totals.metricRows;
+          summary.repoRows += totals.repoRows;
+          daySummary.actorRows += totals.actorRows;
+          daySummary.eventRows += totals.eventRows;
+          daySummary.metricRows += totals.metricRows;
+          daySummary.repoRows += totals.repoRows;
+        }
+
+        refreshContributorCounts(database, [metricDate]);
+        clearActorRows(database, metricDate);
+        const pruned = pruneDailyNoise(database, metricDate, {
+          minDailyContributors,
+          minDailyEvents,
+        });
+        setGhArchiveDayState(database, metricDate, {
+          ...daySummary,
+          completedAt: new Date().toISOString(),
+          prunedMetrics: pruned.removedMetrics,
+          prunedRepos: pruned.removedRepos,
+          startedAt: dayStartedAt,
+          status: "ok",
+        });
+        console.log(`Completed ${metricDate}`, { ...daySummary, ...pruned });
+      } catch (error) {
+        setGhArchiveDayState(database, metricDate, {
+          ...daySummary,
+          errorMessage:
+            error instanceof Error ? error.message.slice(0, 600) : String(error).slice(0, 600),
+          startedAt: dayStartedAt,
+          status: "error",
+        });
+        throw error;
       }
-
-      refreshContributorCounts(database, [metricDate]);
-      clearActorRows(database, metricDate);
-      const pruned = pruneDailyNoise(database, metricDate, {
-        minDailyContributors,
-        minDailyEvents,
-      });
-      console.log(`Completed ${metricDate}`, { ...daySummary, ...pruned });
     }
     setIngestionState(database, "gharchive_backfill", {
       completedAt: new Date().toISOString(),
-      days,
       endDate: metricDates.at(-1),
       metricDates,
+      replaceExisting,
       startedAt,
       summary,
       thresholds: {
@@ -456,6 +601,27 @@ export async function backfillGhArchive({
   }
 }
 
+export async function backfillGhArchive({
+  days = 30,
+  endDate,
+  hourLimit = null,
+  hourTimeoutMs = Number(process.env.GHARCHIVE_HOUR_TIMEOUT_MS ?? 30 * 60 * 1000),
+  minDailyContributors = 3,
+  minDailyEvents = 6,
+  replaceExisting = false,
+} = {}) {
+  const metricDates = buildTrailingUtcDates(days, endDate).map(formatUtcDate);
+
+  return backfillGhArchiveDates({
+    hourLimit,
+    hourTimeoutMs,
+    metricDates,
+    minDailyContributors,
+    minDailyEvents,
+    replaceExisting,
+  });
+}
+
 if (isMainModule(import.meta)) {
   const args = parseArgs();
   const days = Number(args.days ?? 30);
@@ -466,8 +632,10 @@ if (isMainModule(import.meta)) {
     days,
     endDate: args["end-date"],
     hourLimit,
+    hourTimeoutMs: Number(args["hour-timeout-ms"] ?? 30 * 60 * 1000),
     minDailyContributors: Number(args["min-daily-contributors"] ?? 3),
     minDailyEvents: Number(args["min-daily-events"] ?? 6),
+    replaceExisting: args["replace-existing"] === "true" || args["replace-existing"] === "1",
   })
     .then((summary) => {
       console.log("Completed GH Archive backfill.");

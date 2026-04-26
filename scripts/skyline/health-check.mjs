@@ -1,5 +1,7 @@
 import {
+  dayStartUtc,
   ensureSchema,
+  formatUtcDate,
   getIngestionState,
   isMainModule,
   loadLocalEnv,
@@ -7,6 +9,8 @@ import {
   openSkylineDatabase,
   parseArgs,
 } from "./shared.mjs";
+
+const dayMs = 24 * 60 * 60 * 1000;
 
 function buildCheck(database, stateKey, maxAgeMinutes, required = true) {
   const state = getIngestionState(database, stateKey);
@@ -25,7 +29,46 @@ function buildCheck(database, stateKey, maxAgeMinutes, required = true) {
   };
 }
 
+function getMaxMetricDate(database) {
+  const row = database
+    .prepare(
+      `
+        SELECT MAX(metric_date) AS max_metric_date
+        FROM skyline_repo_daily_metrics
+      `,
+    )
+    .get();
+
+  return row?.max_metric_date ?? null;
+}
+
+function buildMetricFreshnessCheck(database, maxLagDays) {
+  const maxMetricDate = getMaxMetricDate(database);
+  const safeEndDate = formatUtcDate(dayStartUtc(new Date(Date.now() - dayMs)));
+  const lagDays = maxMetricDate
+    ? Math.max(
+        0,
+        Math.round(
+          (new Date(`${safeEndDate}T00:00:00.000Z`).getTime() -
+            new Date(`${maxMetricDate}T00:00:00.000Z`).getTime()) /
+            dayMs,
+        ),
+      )
+    : null;
+
+  return {
+    healthy: lagDays !== null && lagDays <= maxLagDays,
+    lagDays,
+    maxLagDays,
+    maxMetricDate,
+    required: true,
+    safeEndDate,
+    stateKey: "skyline_repo_daily_metrics.max_metric_date",
+  };
+}
+
 export function runHealthCheck({
+  metricMaxLagDays = 2,
   recentMetricsMaxAgeMinutes = 90,
   repoMaxAgeMinutes = 30,
   snapshotMaxAgeMinutes = 90,
@@ -39,6 +82,7 @@ export function runHealthCheck({
     ensureSchema(database);
 
     const checks = [
+      buildMetricFreshnessCheck(database, metricMaxLagDays),
       buildCheck(database, "repo_enrichment", repoMaxAgeMinutes, true),
       buildCheck(database, "snapshot_materialization", snapshotMaxAgeMinutes, true),
       buildCheck(database, "recent_metrics_rollup", recentMetricsMaxAgeMinutes, false),
@@ -67,6 +111,7 @@ if (isMainModule(import.meta)) {
   const args = parseArgs();
 
   runHealthCheck({
+    metricMaxLagDays: Number(args["metric-max-lag-days"] ?? 2),
     recentMetricsMaxAgeMinutes: Number(args["recent-metrics-max-age-minutes"] ?? 90),
     repoMaxAgeMinutes: Number(args["repo-max-age-minutes"] ?? 30),
     snapshotMaxAgeMinutes: Number(args["snapshot-max-age-minutes"] ?? 90),

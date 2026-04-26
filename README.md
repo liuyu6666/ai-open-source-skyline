@@ -32,6 +32,13 @@ npm run dev
 - 聚合 `Watch / Push / PR / Issues / Release / Create / Fork` 到日级表
 - 记录 repo-day 贡献者集合
 
+持续运行时使用 `npm run db:gharchive:loop`：
+
+- 每轮只处理缺失的完整 UTC 日期，默认跳过当天、追到昨天
+- 每个日期会写入 `skyline_gharchive_days`，记录 `running / ok / error`
+- 处理日期前会清掉该日期的旧指标，保证失败重试不会重复累加
+- 每小时文件会输出进度日志，默认 30 分钟超时，可用 `--hour-timeout-ms` 调整
+
 3. `npm run db:enrich`
 - 用 GitHub REST `/repos/{owner}/{repo}` 补仓库元数据
 - 拉 stars 总量、语言、topics、pushed_at、归档状态等

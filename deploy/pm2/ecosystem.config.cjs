@@ -66,6 +66,21 @@ module.exports = {
       restart_delay: 5000,
     },
     {
+      name: "skyline-gharchive",
+      cwd: appRoot,
+      script: "scripts/skyline/gharchive-loop.mjs",
+      interpreter: nodeBinary,
+      args:
+        "--interval-ms=3600000 --active-interval-ms=60000 --days-per-cycle=1 --lag-days=1 --hour-timeout-ms=1800000 --min-daily-events=6 --min-daily-contributors=3",
+      env: {
+        NODE_ENV: "production",
+        PATH: `${nodePath}:${process.env.PATH || ""}`,
+      },
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 5000,
+    },
+    {
       name: "skyline-snapshot",
       cwd: appRoot,
       script: "scripts/skyline/snapshot-loop.mjs",

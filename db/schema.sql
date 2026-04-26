@@ -86,6 +86,24 @@ CREATE TABLE IF NOT EXISTS skyline_repo_daily_actors (
 CREATE INDEX IF NOT EXISTS skyline_repo_daily_actors_date_idx
   ON skyline_repo_daily_actors (metric_date DESC);
 
+CREATE TABLE IF NOT EXISTS skyline_gharchive_days (
+  metric_date TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'pending',
+  started_at TEXT,
+  completed_at TEXT,
+  event_rows INTEGER NOT NULL DEFAULT 0,
+  repo_rows INTEGER NOT NULL DEFAULT 0,
+  metric_rows INTEGER NOT NULL DEFAULT 0,
+  actor_rows INTEGER NOT NULL DEFAULT 0,
+  pruned_metrics INTEGER NOT NULL DEFAULT 0,
+  pruned_repos INTEGER NOT NULL DEFAULT 0,
+  error_message TEXT,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS skyline_gharchive_days_status_idx
+  ON skyline_gharchive_days (status, metric_date ASC);
+
 CREATE TABLE IF NOT EXISTS skyline_repo_recent_metrics (
   repo_full_name TEXT PRIMARY KEY REFERENCES skyline_repos(full_name) ON DELETE CASCADE,
   anchor_metric_date TEXT NOT NULL,

@@ -12,6 +12,7 @@
     "db:enrich": "node scripts/skyline/enrich-repos.mjs",
     "db:enrich:catalog": "node scripts/skyline/enrich-catalog.mjs",
     "db:enrich:loop": "node scripts/skyline/enrich-loop.mjs",
+    "db:gharchive:loop": "node scripts/skyline/gharchive-loop.mjs",
     "db:health": "node scripts/skyline/health-check.mjs",
     "db:readmes": "node scripts/skyline/fetch-readmes.mjs",
     "db:recent-metrics": "node scripts/skyline/refresh-recent-metrics.mjs",

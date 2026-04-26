@@ -207,9 +207,15 @@ export function openSkylineDatabase() {
   ensureDirectory(path.dirname(databasePath));
 
   const database = new DatabaseSync(databasePath);
-  database.exec("PRAGMA busy_timeout = 5000;");
+  const busyTimeoutMs = Number(process.env.SKYLINE_SQLITE_BUSY_TIMEOUT_MS ?? 60_000);
+  const normalizedBusyTimeoutMs = Number.isFinite(busyTimeoutMs)
+    ? busyTimeoutMs
+    : 60_000;
+
+  database.exec(`PRAGMA busy_timeout = ${normalizedBusyTimeoutMs};`);
   database.exec("PRAGMA foreign_keys = ON;");
-  database.exec("PRAGMA journal_mode = WAL;");
+  // Schema application owns journal mode changes; repeating it on every connection
+  // can create avoidable lock contention while background writers are active.
   database.exec("PRAGMA synchronous = NORMAL;");
 
   return database;
@@ -265,16 +271,22 @@ export function computeTowerHeight(totalStars, maxStars) {
 }
 
 export function withTransaction(database, fn) {
-  database.exec("BEGIN IMMEDIATE;");
+  return runWithSqliteBusyRetry(() => {
+    database.exec("BEGIN IMMEDIATE;");
 
-  try {
-    const result = fn();
-    database.exec("COMMIT;");
-    return result;
-  } catch (error) {
-    database.exec("ROLLBACK;");
-    throw error;
-  }
+    try {
+      const result = fn();
+      database.exec("COMMIT;");
+      return result;
+    } catch (error) {
+      try {
+        database.exec("ROLLBACK;");
+      } catch {
+        // Preserve the original transaction failure.
+      }
+      throw error;
+    }
+  });
 }
 
 export function chunk(items, size) {
@@ -297,6 +309,48 @@ export function dayStartUtc(date) {
   );
 }
 
+function sleepSync(ms) {
+  const view = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(view, 0, 0, ms);
+}
+
+export function isSqliteBusyError(error) {
+  return (
+    error?.errcode === 5 ||
+    error?.code === "SQLITE_BUSY" ||
+    (error instanceof Error && /database is locked|SQLITE_BUSY/u.test(error.message))
+  );
+}
+
+export function runWithSqliteBusyRetry(
+  fn,
+  {
+    delayMs = 1_000,
+    label = "sqlite operation",
+    maxDelayMs = 10_000,
+    retries = 8,
+  } = {},
+) {
+  let attempt = 0;
+
+  while (true) {
+    try {
+      return fn();
+    } catch (error) {
+      if (!isSqliteBusyError(error) || attempt >= retries) {
+        throw error;
+      }
+
+      const waitMs = Math.min(maxDelayMs, delayMs * 2 ** attempt);
+      console.warn(
+        `[sqlite] ${label} locked; retrying attempt=${attempt + 1}/${retries} waitMs=${waitMs}`,
+      );
+      sleepSync(waitMs);
+      attempt += 1;
+    }
+  }
+}
+
 export function buildTrailingUtcDates(days, endDateString) {
   const dates = [];
   const endDate = endDateString
@@ -316,26 +370,52 @@ export function ghArchiveUrl(metricDate, hour) {
   return `https://data.gharchive.org/${metricDate}-${hour}.json.gz`;
 }
 
-export async function streamGhArchiveLines(metricDate, hour, onLine) {
-  const response = await fetch(ghArchiveUrl(metricDate, hour));
+export async function streamGhArchiveLines(
+  metricDate,
+  hour,
+  onLine,
+  {
+    timeoutMs = 30 * 60 * 1000,
+  } = {},
+) {
+  const abortController = new AbortController();
+  const timeout = timeoutMs > 0
+    ? setTimeout(() => abortController.abort(), timeoutMs)
+    : null;
 
-  if (!response.ok || !response.body) {
-    throw new Error(
-      `Failed to fetch GH Archive ${metricDate}-${hour}: ${response.status}`,
-    );
-  }
+  try {
+    const response = await fetch(ghArchiveUrl(metricDate, hour), {
+      signal: abortController.signal,
+    });
 
-  const gzip = Readable.fromWeb(response.body);
-  const gunzip = gzip.pipe(await import("node:zlib").then((module) => module.createGunzip()));
-  const readline = await import("node:readline");
-  const lineReader = readline.createInterface({
-    crlfDelay: Infinity,
-    input: gunzip,
-  });
+    if (!response.ok || !response.body) {
+      throw new Error(
+        `Failed to fetch GH Archive ${metricDate}-${hour}: ${response.status}`,
+      );
+    }
 
-  for await (const line of lineReader) {
-    if (line) {
-      onLine(line);
+    const gzip = Readable.fromWeb(response.body);
+    const gunzip = gzip.pipe(await import("node:zlib").then((module) => module.createGunzip()));
+    const readline = await import("node:readline");
+    const lineReader = readline.createInterface({
+      crlfDelay: Infinity,
+      input: gunzip,
+    });
+
+    for await (const line of lineReader) {
+      if (line) {
+        onLine(line);
+      }
+    }
+  } catch (error) {
+    if (abortController.signal.aborted) {
+      throw new Error(`GH Archive ${metricDate}-${hour} timed out after ${timeoutMs}ms`);
+    }
+
+    throw error;
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
     }
   }
 }
@@ -474,24 +554,30 @@ export async function fetchDeepSeekChatCompletion({
 }
 
 export function setIngestionState(database, stateKey, stateValue) {
-  database
-    .prepare(
-      `
-        INSERT INTO skyline_ingestion_state (
-          state_key,
-          state_value,
-          updated_at
+  return runWithSqliteBusyRetry(
+    () =>
+      database
+        .prepare(
+          `
+            INSERT INTO skyline_ingestion_state (
+              state_key,
+              state_value,
+              updated_at
+            )
+            VALUES ($stateKey, $stateValue, CURRENT_TIMESTAMP)
+            ON CONFLICT(state_key) DO UPDATE SET
+              state_value = excluded.state_value,
+              updated_at = CURRENT_TIMESTAMP
+          `,
         )
-        VALUES ($stateKey, $stateValue, CURRENT_TIMESTAMP)
-        ON CONFLICT(state_key) DO UPDATE SET
-          state_value = excluded.state_value,
-          updated_at = CURRENT_TIMESTAMP
-      `,
-    )
-    .run({
-      stateKey,
-      stateValue: JSON.stringify(stateValue),
-    });
+        .run({
+          stateKey,
+          stateValue: JSON.stringify(stateValue),
+        }),
+    {
+      label: `ingestion state ${stateKey}`,
+    },
+  );
 }
 
 export function getIngestionState(database, stateKey) {
