@@ -71,7 +71,7 @@ module.exports = {
       script: "scripts/skyline/gharchive-loop.mjs",
       interpreter: nodeBinary,
       args:
-        "--interval-ms=3600000 --active-interval-ms=60000 --days-per-cycle=1 --lag-days=1 --hour-timeout-ms=1800000 --min-daily-events=6 --min-daily-contributors=3",
+        "--interval-ms=3600000 --active-interval-ms=60000 --days-per-cycle=1 --lag-days=1 --hour-timeout-ms=14400000 --min-daily-events=6 --min-daily-contributors=3",
       env: {
         NODE_ENV: "production",
         PATH: `${nodePath}:${process.env.PATH || ""}`,

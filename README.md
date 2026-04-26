@@ -38,6 +38,7 @@ npm run dev
 - 每个日期会写入 `skyline_gharchive_days`，记录 `running / ok / error`
 - 处理日期前会清掉该日期的旧指标，保证失败重试不会重复累加
 - 每小时文件会输出进度日志，默认 30 分钟超时，可用 `--hour-timeout-ms` 调整
+- 如果服务器到 `data.gharchive.org` 很慢，首次追数据会被下载速度主导，生产环境应优先使用更好的出海带宽或代理
 
 3. `npm run db:enrich`
 - 用 GitHub REST `/repos/{owner}/{repo}` 补仓库元数据
